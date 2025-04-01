@@ -19,6 +19,11 @@ import (
 
 type userKeeper interface {
 	CreateUser(ctx context.Context, usr *models.User) (string, error)
+
+	GetUserIDByLoginAndPassword(
+		ctx context.Context,
+		usr *models.User,
+	) (string, error)
 }
 
 type storage interface {

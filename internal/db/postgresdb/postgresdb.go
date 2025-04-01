@@ -14,6 +14,25 @@ type PostgresDB struct {
 	database *sql.DB
 }
 
+func (db *PostgresDB) GetUserIDByLoginAndPassword(
+	ctx context.Context,
+	usr *models.User,
+) (string, error) {
+	var userID string
+	query := `SELECT id FROM users WHERE login = $1 AND pass = $2`
+	err := db.database.QueryRowContext(ctx, query, usr.Login, usr.Pass).Scan(&userID)
+
+	if errors.Is(err, sql.ErrNoRows) {
+		return "", nil
+	}
+
+	if err != nil {
+		return "", err
+	}
+
+	return userID, nil
+}
+
 func (db *PostgresDB) CreateUser(
 	ctx context.Context,
 	usr *models.User,
