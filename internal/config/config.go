@@ -10,10 +10,12 @@ import (
 )
 
 type Config struct {
-	RunAddr       string `env:"SERVER_ADDRESS" envDefault:":8080" validate:"hostname_port"`
-	LogLevel      string `env:"LOG_LEVEL" envDefault:"info" validate:"loglevel"`
-	DatabaseDSN   string `env:"DATABASE_URI"`
-	MigrationsDir string `env:"MIGRATIONS_DIR" envDefault:"migrations"`
+	RunAddr                    string `env:"SERVER_ADDRESS" envDefault:":8080" validate:"hostname_port"`
+	LogLevel                   string `env:"LOG_LEVEL" envDefault:"debug" validate:"loglevel"`
+	DatabaseDSN                string `env:"DATABASE_URI"`
+	MigrationsDir              string `env:"MIGRATIONS_DIR" envDefault:"migrations"`
+	AuthCookieSigningSecretKey string `env:"AUTH_COOKIE_SIGNING_SECRET_KEY" envDefault:"LduYtmp2gWSRuyQyRHqbog=="`
+	AuthCookieName             string `env:"AUTH_COOKIE_NAME" envDefault:"auth"`
 }
 
 func validateFilePath(fieldLevel validator.FieldLevel) bool {

@@ -2,10 +2,13 @@ package app
 
 import (
 	"context"
+	"encoding/base64"
 	"fmt"
+	"github.com/patric-chuzhbe/diploma/internal/auth"
 	"github.com/patric-chuzhbe/diploma/internal/config"
 	"github.com/patric-chuzhbe/diploma/internal/db/postgresdb"
 	"github.com/patric-chuzhbe/diploma/internal/logger"
+	"github.com/patric-chuzhbe/diploma/internal/models"
 	"github.com/patric-chuzhbe/diploma/internal/router"
 	"net/http"
 	"os"
@@ -14,7 +17,12 @@ import (
 	"time"
 )
 
+type userKeeper interface {
+	CreateUser(ctx context.Context, usr *models.User) (string, error)
+}
+
 type storage interface {
+	userKeeper
 	Close() error
 }
 
@@ -43,8 +51,18 @@ func New() (*App, error) {
 		return nil, err
 	}
 
+	authCookieSigningSecretKey, err := base64.URLEncoding.DecodeString(app.cfg.AuthCookieSigningSecretKey)
+	if err != nil {
+		return nil, err
+	}
+
 	app.httpHandler = router.New(
 		app.db,
+		auth.New(
+			app.db,
+			app.cfg.AuthCookieName,
+			authCookieSigningSecretKey,
+		),
 	)
 
 	return app, nil
