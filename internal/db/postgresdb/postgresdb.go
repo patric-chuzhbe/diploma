@@ -14,6 +14,65 @@ type PostgresDB struct {
 	database *sql.DB
 }
 
+func (db *PostgresDB) SaveNewOrderForUser(
+	ctx context.Context,
+	userID string,
+	orderNumber string,
+) (string, error) {
+	var actualUserID string
+	query := `
+		WITH 
+			ins_order AS (
+				INSERT INTO orders (id, status)
+				   VALUES ($1, 'NEW')
+				   ON CONFLICT (id) DO NOTHING 
+			), 
+			ins_users_orders AS (
+				INSERT INTO users_orders (user_id, order_id)
+					VALUES ($2, $1)
+					ON CONFLICT (order_id) DO NOTHING
+			)
+		SELECT user_id FROM users_orders WHERE order_id = $1;
+	`
+	err := db.database.QueryRowContext(ctx, query, orderNumber, userID).Scan(&actualUserID)
+
+	if errors.Is(err, sql.ErrNoRows) {
+		// Successfully inserted and linked order
+		return userID, nil
+	}
+
+	if err != nil {
+		return "", err
+	}
+
+	return actualUserID, models.ErrOrderAlreadyExists
+}
+
+func (db *PostgresDB) GetUserByID(
+	ctx context.Context,
+	userID string,
+) (*models.User, error) {
+	if userID == "" {
+		return &models.User{}, nil
+	}
+
+	row := db.database.QueryRowContext(
+		ctx,
+		`SELECT id FROM users WHERE id = $1`,
+		userID,
+	)
+	var userIDFromDB string
+	err := row.Scan(&userIDFromDB)
+	if errors.Is(err, sql.ErrNoRows) {
+		return &models.User{}, nil
+	}
+	if err != nil {
+		return &models.User{}, err
+	}
+
+	return &models.User{ID: userIDFromDB}, nil
+}
+
 func (db *PostgresDB) GetUserIDByLoginAndPassword(
 	ctx context.Context,
 	usr *models.User,

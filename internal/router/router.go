@@ -4,11 +4,15 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"github.com/go-chi/chi/v5"
 	"github.com/go-playground/validator/v10"
+	"github.com/joeljunstrom/go-luhn"
+	"github.com/patric-chuzhbe/diploma/internal/auth"
 	"github.com/patric-chuzhbe/diploma/internal/logger"
 	"github.com/patric-chuzhbe/diploma/internal/models"
 	"go.uber.org/zap"
+	"io"
 	"net/http"
 	"regexp"
 )
@@ -23,10 +27,17 @@ type storage interface {
 		ctx context.Context,
 		usr *models.User,
 	) (string, error)
+
+	SaveNewOrderForUser(
+		ctx context.Context,
+		userID string,
+		orderNumber string,
+	) (string, error)
 }
 
 type authenticator interface {
 	SetAuthData(userID string, response http.ResponseWriter) error
+	AuthenticateUser(h http.Handler) http.Handler
 }
 
 type router struct {
@@ -35,6 +46,65 @@ type router struct {
 }
 
 var pwdPattern = regexp.MustCompile(`^[a-zA-Z0-9~!@#$%^*]+$`)
+
+var orderNumberPattern = regexp.MustCompile(`^\d+$`)
+
+func (theRouter router) validateOrderNumber(orderNumber []byte) error {
+	if !orderNumberPattern.Match(orderNumber) {
+		return errors.New("order number contains invalid characters")
+	}
+
+	if !luhn.Valid(string(orderNumber)) {
+		return errors.New("order number is invalid")
+	}
+
+	return nil
+}
+
+func (theRouter router) PostApiuserorders(response http.ResponseWriter, request *http.Request) {
+	if request.Header.Get("Content-Type") != "text/plain" {
+		response.WriteHeader(http.StatusBadRequest)
+		return
+	}
+
+	userID, ok := request.Context().Value(auth.UserIDKey).(string)
+	if !ok || userID == "" {
+		response.WriteHeader(http.StatusUnauthorized)
+		return
+	}
+
+	orderNumber, err := io.ReadAll(request.Body)
+	if err != nil {
+		logger.Log.Debugln("error while `io.ReadAll()` calling: ", zap.Error(err))
+		response.WriteHeader(http.StatusInternalServerError)
+		return
+	}
+
+	err = theRouter.validateOrderNumber(orderNumber)
+	if err != nil {
+		http.Error(
+			response,
+			fmt.Sprintf(
+				"invalid order number: %v",
+				err,
+			),
+			http.StatusUnprocessableEntity,
+		)
+		return
+	}
+
+	actualUserID, err := theRouter.db.SaveNewOrderForUser(request.Context(), userID, string(orderNumber))
+	if errors.Is(err, models.ErrOrderAlreadyExists) {
+		if actualUserID == userID {
+			response.WriteHeader(http.StatusOK)
+			return
+		}
+		response.WriteHeader(http.StatusConflict)
+		return
+	}
+
+	response.WriteHeader(http.StatusAccepted)
+}
 
 func (theRouter router) PostApiuserlogin(response http.ResponseWriter, request *http.Request) {
 	if request.Method != http.MethodPost {
@@ -94,8 +164,7 @@ func (theRouter router) PostApiuserlogin(response http.ResponseWriter, request *
 }
 
 func validatePassword(fl validator.FieldLevel) bool {
-	matched := pwdPattern.MatchString(fl.Field().String())
-	return matched
+	return pwdPattern.MatchString(fl.Field().String())
 }
 
 func (theRouter router) PostApiuserregister(response http.ResponseWriter, request *http.Request) {
@@ -185,6 +254,8 @@ func New(
 	r.Post(`/api/user/register`, myRouter.PostApiuserregister)
 
 	r.Post(`/api/user/login`, myRouter.PostApiuserlogin)
+
+	r.With(auth.AuthenticateUser).Post(`/api/user/orders`, myRouter.PostApiuserorders)
 
 	return r
 }

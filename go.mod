@@ -9,8 +9,8 @@ require (
 	github.com/go-chi/chi/v5 v5.2.1
 	github.com/go-playground/validator/v10 v10.26.0
 	github.com/golang-jwt/jwt/v4 v4.5.2
-	github.com/google/uuid v1.6.0
 	github.com/jackc/pgx/v5 v5.7.4
+	github.com/joeljunstrom/go-luhn v0.0.0-20190413165225-1e071b33b576
 	github.com/joho/godotenv v1.5.1
 	github.com/pressly/goose/v3 v3.24.2
 	go.uber.org/zap v1.27.0

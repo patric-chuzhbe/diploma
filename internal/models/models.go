@@ -8,9 +8,12 @@ type UserRegisterRequest struct {
 }
 
 type User struct {
+	ID             string
 	Login          string
 	Pass           string
 	LoyaltyBalance float32
 }
 
 var ErrUserAlreadyExists = errors.New("user already exists")
+
+var ErrOrderAlreadyExists = errors.New("order already exists")

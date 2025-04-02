@@ -24,10 +24,24 @@ type userKeeper interface {
 		ctx context.Context,
 		usr *models.User,
 	) (string, error)
+
+	GetUserByID(
+		ctx context.Context,
+		userID string,
+	) (*models.User, error)
+}
+
+type userOrderKeeper interface {
+	SaveNewOrderForUser(
+		ctx context.Context,
+		userID string,
+		orderNumber string,
+	) (string, error)
 }
 
 type storage interface {
 	userKeeper
+	userOrderKeeper
 	Close() error
 }
 
