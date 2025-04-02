@@ -102,6 +102,11 @@ func (theRouter router) PostApiuserorders(response http.ResponseWriter, request 
 		response.WriteHeader(http.StatusConflict)
 		return
 	}
+	if err != nil {
+		logger.Log.Debugln("error while `theRouter.db.SaveNewOrderForUser()` calling: ", zap.Error(err))
+		response.WriteHeader(http.StatusInternalServerError)
+		return
+	}
 
 	response.WriteHeader(http.StatusAccepted)
 }
