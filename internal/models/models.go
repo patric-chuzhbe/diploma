@@ -17,3 +17,10 @@ type User struct {
 var ErrUserAlreadyExists = errors.New("user already exists")
 
 var ErrOrderAlreadyExists = errors.New("order already exists")
+
+type Order struct {
+	Number     string   `json:"number"`
+	Status     string   `json:"status"`
+	Accrual    *float32 `json:"accrual,omitempty"`
+	UploadedAt string   `json:"uploaded_at"`
+}

@@ -33,6 +33,11 @@ type storage interface {
 		userID string,
 		orderNumber string,
 	) (string, error)
+
+	GetUserOrders(
+		ctx context.Context,
+		userID string,
+	) ([]models.Order, error)
 }
 
 type authenticator interface {
@@ -48,6 +53,34 @@ type router struct {
 var pwdPattern = regexp.MustCompile(`^[a-zA-Z0-9~!@#$%^*]+$`)
 
 var orderNumberPattern = regexp.MustCompile(`^\d+$`)
+
+func (theRouter router) GetApiuserorders(response http.ResponseWriter, request *http.Request) {
+	userID, ok := request.Context().Value(auth.UserIDKey).(string)
+	if !ok || userID == "" {
+		response.WriteHeader(http.StatusUnauthorized)
+		return
+	}
+
+	responseDTO, err := theRouter.db.GetUserOrders(request.Context(), userID)
+	if err != nil {
+		logger.Log.Debugln("Error calling the `theRouter.db.GetUserOrders()`: ", zap.Error(err))
+		response.WriteHeader(http.StatusInternalServerError)
+		return
+	}
+
+	if len(responseDTO) == 0 {
+		response.WriteHeader(http.StatusNoContent)
+		return
+	}
+
+	response.Header().Set("Content-Type", "application/json")
+
+	err = json.NewEncoder(response).Encode(responseDTO)
+	if err != nil {
+		logger.Log.Debug("error encoding response", zap.Error(err))
+		return
+	}
+}
 
 func (theRouter router) validateOrderNumber(orderNumber []byte) error {
 	if !orderNumberPattern.Match(orderNumber) {
@@ -261,6 +294,8 @@ func New(
 	r.Post(`/api/user/login`, myRouter.PostApiuserlogin)
 
 	r.With(auth.AuthenticateUser).Post(`/api/user/orders`, myRouter.PostApiuserorders)
+
+	r.With(auth.AuthenticateUser).Get(`/api/user/orders`, myRouter.GetApiuserorders)
 
 	return r
 }

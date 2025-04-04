@@ -37,6 +37,11 @@ type userOrderKeeper interface {
 		userID string,
 		orderNumber string,
 	) (string, error)
+
+	GetUserOrders(
+		ctx context.Context,
+		userID string,
+	) ([]models.Order, error)
 }
 
 type storage interface {

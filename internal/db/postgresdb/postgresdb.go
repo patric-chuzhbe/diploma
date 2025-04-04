@@ -14,6 +14,72 @@ type PostgresDB struct {
 	database *sql.DB
 }
 
+func (db *PostgresDB) GetUserOrders(
+	ctx context.Context,
+	userID string,
+) ([]models.Order, error) {
+	rows, err := db.database.QueryContext(
+		ctx,
+		`
+			SELECT 
+				orders.id,
+				orders.status,
+				orders.uploaded_at,
+				orders.accrual
+				FROM orders
+					JOIN users_orders ON 
+						users_orders.order_id = orders.id
+							AND users_orders.user_id = $1
+				ORDER BY orders.uploaded_at DESC;
+		`,
+		userID,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	result := []models.Order{}
+	for rows.Next() {
+		var number,
+			status,
+			uploadedAt string
+		var accrual sql.NullFloat64
+		err = rows.Scan(
+			&number,
+			&status,
+			&uploadedAt,
+			&accrual,
+		)
+		if err != nil {
+			return nil, err
+		}
+
+		var accrualPtr *float32
+		if accrual.Valid {
+			accrualValue := float32(accrual.Float64)
+			accrualPtr = &accrualValue
+		}
+
+		result = append(
+			result,
+			models.Order{
+				Number:     number,
+				Status:     status,
+				Accrual:    accrualPtr,
+				UploadedAt: uploadedAt,
+			},
+		)
+	}
+
+	err = rows.Err()
+	if err != nil {
+		return nil, err
+	}
+
+	return result, nil
+}
+
 func (db *PostgresDB) SaveNewOrderForUser(
 	ctx context.Context,
 	userID string,
