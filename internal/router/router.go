@@ -38,6 +38,11 @@ type storage interface {
 		ctx context.Context,
 		userID string,
 	) ([]models.Order, error)
+
+	GetUserBalanceAndWithdrawals(
+		ctx context.Context,
+		userID string,
+	) (*models.UserBalanceAndWithdrawals, error)
 }
 
 type authenticator interface {
@@ -53,6 +58,29 @@ type router struct {
 var pwdPattern = regexp.MustCompile(`^[a-zA-Z0-9~!@#$%^*]+$`)
 
 var orderNumberPattern = regexp.MustCompile(`^\d+$`)
+
+func (theRouter router) GetApiuserbalance(response http.ResponseWriter, request *http.Request) {
+	userID, ok := request.Context().Value(auth.UserIDKey).(string)
+	if !ok || userID == "" {
+		response.WriteHeader(http.StatusUnauthorized)
+		return
+	}
+
+	responseDTO, err := theRouter.db.GetUserBalanceAndWithdrawals(request.Context(), userID)
+	if err != nil {
+		logger.Log.Debugln("Error calling the `theRouter.db.GetUserBalanceAndWithdrawals()`: ", zap.Error(err))
+		response.WriteHeader(http.StatusInternalServerError)
+		return
+	}
+
+	response.Header().Set("Content-Type", "application/json")
+
+	err = json.NewEncoder(response).Encode(responseDTO)
+	if err != nil {
+		logger.Log.Debug("error encoding response", zap.Error(err))
+		return
+	}
+}
 
 func (theRouter router) GetApiuserorders(response http.ResponseWriter, request *http.Request) {
 	userID, ok := request.Context().Value(auth.UserIDKey).(string)
@@ -296,6 +324,8 @@ func New(
 	r.With(auth.AuthenticateUser).Post(`/api/user/orders`, myRouter.PostApiuserorders)
 
 	r.With(auth.AuthenticateUser).Get(`/api/user/orders`, myRouter.GetApiuserorders)
+
+	r.With(auth.AuthenticateUser).Get(`/api/user/balance`, myRouter.GetApiuserbalance)
 
 	return r
 }

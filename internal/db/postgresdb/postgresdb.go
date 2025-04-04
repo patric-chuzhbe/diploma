@@ -14,6 +14,54 @@ type PostgresDB struct {
 	database *sql.DB
 }
 
+func (db *PostgresDB) GetUserBalanceAndWithdrawals(
+	ctx context.Context,
+	userID string,
+) (*models.UserBalanceAndWithdrawals, error) {
+	row := db.database.QueryRowContext(
+		ctx,
+		`
+			SELECT 
+				users.id,
+				users.loyalty_balance,
+				SUM(withdrawals."sum")
+				FROM users
+					LEFT JOIN users_withdrawals ON 
+						users_withdrawals.user_id = users.id 
+					LEFT JOIN withdrawals ON 
+						withdrawals.order_number = users_withdrawals.withdraw_order_number
+				WHERE users.id = $1
+				GROUP BY users.id
+				LIMIT 1;
+		`,
+		userID,
+	)
+	var userIDFromDB string
+	var balance float32
+	var withdrawalsSum sql.NullFloat64
+	err := row.Scan(
+		&userIDFromDB,
+		&balance,
+		&withdrawalsSum,
+	)
+	if errors.Is(err, sql.ErrNoRows) {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, err
+	}
+
+	withdrawalsSumValue := float32(0)
+	if withdrawalsSum.Valid {
+		withdrawalsSumValue = float32(withdrawalsSum.Float64)
+	}
+
+	return &models.UserBalanceAndWithdrawals{
+		Current:   balance,
+		Withdrawn: withdrawalsSumValue,
+	}, nil
+}
+
 func (db *PostgresDB) GetUserOrders(
 	ctx context.Context,
 	userID string,

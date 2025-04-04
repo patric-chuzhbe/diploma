@@ -24,3 +24,8 @@ type Order struct {
 	Accrual    *float32 `json:"accrual,omitempty"`
 	UploadedAt string   `json:"uploaded_at"`
 }
+
+type UserBalanceAndWithdrawals struct {
+	Current   float32 `json:"current"`
+	Withdrawn float32 `json:"withdrawn"`
+}

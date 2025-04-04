@@ -42,6 +42,11 @@ type userOrderKeeper interface {
 		ctx context.Context,
 		userID string,
 	) ([]models.Order, error)
+
+	GetUserBalanceAndWithdrawals(
+		ctx context.Context,
+		userID string,
+	) (*models.UserBalanceAndWithdrawals, error)
 }
 
 type storage interface {
