@@ -14,6 +14,113 @@ type PostgresDB struct {
 	database *sql.DB
 }
 
+func (db *PostgresDB) Withdraw(
+	ctx context.Context,
+	userID string,
+	orderNumber string,
+	withdrawSum float32,
+) error {
+	transaction, err := db.database.Begin()
+	if err != nil {
+		return err
+	}
+
+	var loyaltyBalance float32
+	err = transaction.QueryRowContext(
+		ctx,
+		`SELECT loyalty_balance FROM users WHERE id = $1;`,
+		userID,
+	).Scan(&loyaltyBalance)
+	if err != nil {
+		err2 := transaction.Rollback()
+		if err2 != nil {
+			return err2
+		}
+		return err
+	}
+
+	if loyaltyBalance < withdrawSum {
+		err = transaction.Rollback()
+		if err != nil {
+			return err
+		}
+		return models.ErrNotEnoughBalance
+	}
+
+	var orderNumberFromDB string
+	err = transaction.QueryRowContext(
+		ctx,
+		`
+			INSERT INTO withdrawals (order_number, sum)
+				VALUES ($1, $2)
+				ON CONFLICT (order_number) DO NOTHING
+				RETURNING order_number;
+		`,
+		orderNumber,
+		withdrawSum,
+	).Scan(&orderNumberFromDB)
+
+	if errors.Is(err, sql.ErrNoRows) {
+		err2 := transaction.Rollback()
+		if err2 != nil {
+			return err2
+		}
+		return models.ErrAlreadyWithdrawn
+	}
+
+	if err != nil {
+		err2 := transaction.Rollback()
+		if err2 != nil {
+			return err2
+		}
+		return err
+	}
+
+	_, err = transaction.ExecContext(
+		ctx,
+		`
+			INSERT INTO users_withdrawals(user_id, withdraw_order_number)
+				VALUES ($1, $2);
+		`,
+		userID,
+		orderNumber,
+	)
+	if err != nil {
+		err2 := transaction.Rollback()
+		if err2 != nil {
+			return err2
+		}
+		return err
+	}
+
+	loyaltyBalance -= withdrawSum
+
+	_, err = transaction.ExecContext(
+		ctx,
+		`UPDATE users SET loyalty_balance = $1 WHERE id = $2;`,
+		loyaltyBalance,
+		userID,
+	)
+	if err != nil {
+		err2 := transaction.Rollback()
+		if err2 != nil {
+			return err2
+		}
+		return err
+	}
+
+	err = transaction.Commit()
+	if err != nil {
+		err2 := transaction.Rollback()
+		if err2 != nil {
+			return err2
+		}
+		return err
+	}
+
+	return nil
+}
+
 func (db *PostgresDB) GetUserBalanceAndWithdrawals(
 	ctx context.Context,
 	userID string,

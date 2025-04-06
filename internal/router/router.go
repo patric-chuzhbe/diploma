@@ -43,6 +43,13 @@ type storage interface {
 		ctx context.Context,
 		userID string,
 	) (*models.UserBalanceAndWithdrawals, error)
+
+	Withdraw(
+		ctx context.Context,
+		userID string,
+		orderNumber string,
+		withdrawSum float32,
+	) error
 }
 
 type authenticator interface {
@@ -58,6 +65,47 @@ type router struct {
 var pwdPattern = regexp.MustCompile(`^[a-zA-Z0-9~!@#$%^*]+$`)
 
 var orderNumberPattern = regexp.MustCompile(`^\d+$`)
+
+func (theRouter router) PostApiuserbalancewithdraw(response http.ResponseWriter, request *http.Request) {
+	userID, ok := request.Context().Value(auth.UserIDKey).(string)
+	if !ok || userID == "" {
+		response.WriteHeader(http.StatusUnauthorized)
+		return
+	}
+
+	var requestDTO models.BalanceWithdrawRequest
+	if err := json.NewDecoder(request.Body).Decode(&requestDTO); err != nil {
+		logger.Log.Debugln("cannot decode request JSON body", zap.Error(err))
+		response.WriteHeader(http.StatusInternalServerError)
+		return
+	}
+
+	validate := validator.New()
+	if err := validate.Struct(requestDTO); err != nil {
+		logger.Log.Debugln("incorrect request structure", zap.Error(err))
+		response.WriteHeader(http.StatusBadRequest)
+		return
+	}
+
+	if theRouter.validateOrderNumber([]byte(requestDTO.OrderNumber)) != nil {
+		response.WriteHeader(http.StatusUnprocessableEntity)
+		return
+	}
+
+	err := theRouter.db.Withdraw(request.Context(), userID, requestDTO.OrderNumber, requestDTO.WithdrawSum)
+
+	if errors.Is(err, models.ErrNotEnoughBalance) {
+		response.WriteHeader(http.StatusPaymentRequired)
+		return
+	}
+
+	if errors.Is(err, models.ErrAlreadyWithdrawn) {
+		response.WriteHeader(http.StatusUnprocessableEntity)
+		return
+	}
+
+	response.WriteHeader(http.StatusOK)
+}
 
 func (theRouter router) GetApiuserbalance(response http.ResponseWriter, request *http.Request) {
 	userID, ok := request.Context().Value(auth.UserIDKey).(string)
@@ -326,6 +374,8 @@ func New(
 	r.With(auth.AuthenticateUser).Get(`/api/user/orders`, myRouter.GetApiuserorders)
 
 	r.With(auth.AuthenticateUser).Get(`/api/user/balance`, myRouter.GetApiuserbalance)
+
+	r.With(auth.AuthenticateUser).Post(`/api/user/balance/withdraw`, myRouter.PostApiuserbalancewithdraw)
 
 	return r
 }
