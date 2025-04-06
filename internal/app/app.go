@@ -54,6 +54,11 @@ type userOrderKeeper interface {
 		orderNumber string,
 		withdrawSum float32,
 	) error
+
+	GetUserWithdrawals(
+		ctx context.Context,
+		userID string,
+	) ([]models.UserWithdrawal, error)
 }
 
 type storage interface {

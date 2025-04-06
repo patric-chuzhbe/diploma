@@ -14,6 +14,62 @@ type PostgresDB struct {
 	database *sql.DB
 }
 
+func (db *PostgresDB) GetUserWithdrawals(
+	ctx context.Context,
+	userID string,
+) ([]models.UserWithdrawal, error) {
+	rows, err := db.database.QueryContext(
+		ctx,
+		`
+			SELECT
+				withdrawals.order_number,
+				withdrawals.sum,
+				withdrawals.processed_at
+				FROM withdrawals
+					JOIN users_withdrawals ON 
+						users_withdrawals.withdraw_order_number = withdrawals.order_number
+							AND users_withdrawals.user_id = $1
+				ORDER BY withdrawals.processed_at DESC;
+		`,
+		userID,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	result := []models.UserWithdrawal{}
+	for rows.Next() {
+		var orderNumber string
+		var sum float32
+		var processedAt string
+		err = rows.Scan(
+			&orderNumber,
+			&sum,
+			&processedAt,
+		)
+		if err != nil {
+			return nil, err
+		}
+
+		result = append(
+			result,
+			models.UserWithdrawal{
+				OrderNumber: orderNumber,
+				Sum:         sum,
+				ProcessedAt: processedAt,
+			},
+		)
+	}
+
+	err = rows.Err()
+	if err != nil {
+		return nil, err
+	}
+
+	return result, nil
+}
+
 func (db *PostgresDB) Withdraw(
 	ctx context.Context,
 	userID string,

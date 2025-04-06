@@ -50,6 +50,11 @@ type storage interface {
 		orderNumber string,
 		withdrawSum float32,
 	) error
+
+	GetUserWithdrawals(
+		ctx context.Context,
+		userID string,
+	) ([]models.UserWithdrawal, error)
 }
 
 type authenticator interface {
@@ -65,6 +70,34 @@ type router struct {
 var pwdPattern = regexp.MustCompile(`^[a-zA-Z0-9~!@#$%^*]+$`)
 
 var orderNumberPattern = regexp.MustCompile(`^\d+$`)
+
+func (theRouter router) GetApiuserwithdrawals(response http.ResponseWriter, request *http.Request) {
+	userID, ok := request.Context().Value(auth.UserIDKey).(string)
+	if !ok || userID == "" {
+		response.WriteHeader(http.StatusUnauthorized)
+		return
+	}
+
+	responseDTO, err := theRouter.db.GetUserWithdrawals(request.Context(), userID)
+	if err != nil {
+		logger.Log.Debugln("Error calling the `theRouter.db.GetUserWithdrawals()`: ", zap.Error(err))
+		response.WriteHeader(http.StatusInternalServerError)
+		return
+	}
+
+	if len(responseDTO) == 0 {
+		response.WriteHeader(http.StatusNoContent)
+		return
+	}
+
+	response.Header().Set("Content-Type", "application/json")
+
+	err = json.NewEncoder(response).Encode(responseDTO)
+	if err != nil {
+		logger.Log.Debug("error encoding response", zap.Error(err))
+		return
+	}
+}
 
 func (theRouter router) PostApiuserbalancewithdraw(response http.ResponseWriter, request *http.Request) {
 	userID, ok := request.Context().Value(auth.UserIDKey).(string)
@@ -101,6 +134,12 @@ func (theRouter router) PostApiuserbalancewithdraw(response http.ResponseWriter,
 
 	if errors.Is(err, models.ErrAlreadyWithdrawn) {
 		response.WriteHeader(http.StatusUnprocessableEntity)
+		return
+	}
+
+	if err != nil {
+		logger.Log.Debugln("Error calling the `theRouter.db.Withdraw()`: ", zap.Error(err))
+		response.WriteHeader(http.StatusInternalServerError)
 		return
 	}
 
@@ -376,6 +415,8 @@ func New(
 	r.With(auth.AuthenticateUser).Get(`/api/user/balance`, myRouter.GetApiuserbalance)
 
 	r.With(auth.AuthenticateUser).Post(`/api/user/balance/withdraw`, myRouter.PostApiuserbalancewithdraw)
+
+	r.With(auth.AuthenticateUser).Get(`/api/user/withdrawals`, myRouter.GetApiuserwithdrawals)
 
 	return r
 }

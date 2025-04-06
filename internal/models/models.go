@@ -38,3 +38,9 @@ type BalanceWithdrawRequest struct {
 var ErrNotEnoughBalance = errors.New("not enough loyalty balance")
 
 var ErrAlreadyWithdrawn = errors.New("the order has already withdrawn")
+
+type UserWithdrawal struct {
+	OrderNumber string  `json:"order"`
+	Sum         float32 `json:"sum"`
+	ProcessedAt string  `json:"processed_at"`
+}
