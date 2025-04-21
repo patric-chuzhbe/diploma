@@ -11,7 +11,7 @@ import (
 )
 
 type Config struct {
-	RunAddr                                       string        `env:"SERVER_ADDRESS" envDefault:":8081" validate:"hostname_port"`
+	RunAddr                                       string        `env:"RUN_ADDRESS" envDefault:":8081" validate:"hostname_port"`
 	LogLevel                                      string        `env:"LOG_LEVEL" envDefault:"debug" validate:"loglevel"`
 	DatabaseDSN                                   string        `env:"DATABASE_URI"`
 	MigrationsDir                                 string        `env:"MIGRATIONS_DIR" envDefault:"migrations"`
@@ -22,10 +22,8 @@ type Config struct {
 	DelayBetweenQueueFetchesForAccrualsFetcher    time.Duration `env:"DELAY_BETWEEN_QUEUE_FETCHES_FOR_ACCRUALS_FETCHER" envDefault:"5s"`
 	OrdersBatchSizeForBalancesCalculator          int           `env:"ORDERS_BATCH_SIZE_FOR_BALANCES_CALCULATOR" envDefault:"500"`
 	OrdersBatchSizeForAccrualsFetcher             int           `env:"ORDERS_BATCH_SIZE_FOR_ACCRUALS_FETCHER" envDefault:"500"`
-	SchemaForAccrualsFetcher                      string        `env:"SCHEMA_FOR_ACCRUALS_FETCHER" envDefault:"http"`
-	HostForAccrualsFetcher                        string        `env:"HOST_FOR_ACCRUALS_FETCHER" envDefault:"localhost"`
-	PortForAccrualsFetcher                        string        `env:"PORT_FOR_ACCRUALS_FETCHER" envDefault:"8080"`
 	HttpClientTimeoutForAccrualsFetcher           time.Duration `env:"HTTP_CLIENT_TIMEOUT_FOR_ACCRUALS_FETCHER" envDefault:"10s"`
+	AccrualSystemAddress                          string        `env:"ACCRUAL_SYSTEM_ADDRESS" envDefault:":8080" validate:"hostname_port"`
 }
 
 func validateFilePath(fieldLevel validator.FieldLevel) bool {
@@ -99,7 +97,8 @@ func New(optionsProto ...InitOption) (*Config, error) {
 
 	if !options.disableFlagsParsing {
 		flag.StringVar(&values.RunAddr, "a", values.RunAddr, "address and port to run server")
-		flag.StringVar(&values.DatabaseDSN, "d", values.DatabaseDSN, "A string with the database connection details")
+		flag.StringVar(&values.DatabaseDSN, "d", values.DatabaseDSN, "a string with the database connection details")
+		flag.StringVar(&values.AccrualSystemAddress, "r", values.AccrualSystemAddress, "accrual calculation system address")
 		flag.Parse()
 	}
 

@@ -44,6 +44,7 @@ type AccrualsFetcher struct {
 	host                     string
 	port                     string
 	client                   *http.Client
+	accrualSystemAddress     string
 }
 
 type apiOrder struct {
@@ -87,7 +88,7 @@ func (f *AccrualsFetcher) getNewThrottleTimeout(
 }
 
 func (f *AccrualsFetcher) actualizeOrder(order *models.Order, throttleTimeout time.Duration) (time.Duration, error) {
-	url := fmt.Sprintf("%s://%s:%s/api/orders/%s", f.schema, f.host, f.port, order.Number)
+	url := fmt.Sprintf("%s/api/orders/%s", f.accrualSystemAddress, order.Number)
 	resp, err := f.client.Get(url)
 	if err != nil {
 		f.errorChannel <- fmt.Errorf("failed to make GET request for order %s: %w", order.Number, err)
@@ -260,19 +261,15 @@ func New(
 	delayBetweenQueueFetchesForAccrualsFetcher time.Duration,
 	errorChannelCapacity int,
 	ordersBatchSize int,
-	schema string,
-	host string,
-	port string,
 	httpClientTimeout time.Duration,
+	accrualSystemAddress string,
 ) *AccrualsFetcher {
 	return &AccrualsFetcher{
 		db:                       db,
 		delayBetweenQueueFetches: delayBetweenQueueFetchesForAccrualsFetcher,
 		errorChannel:             make(chan error, errorChannelCapacity),
 		ordersBatchSize:          ordersBatchSize,
-		schema:                   schema,
-		host:                     host,
-		port:                     port,
 		client:                   &http.Client{Timeout: httpClientTimeout},
+		accrualSystemAddress:     accrualSystemAddress,
 	}
 }
