@@ -2,14 +2,18 @@ package app
 
 import (
 	"context"
+	"database/sql"
 	"encoding/base64"
 	"fmt"
+	"github.com/patric-chuzhbe/diploma/internal/accrualsfetcher"
 	"github.com/patric-chuzhbe/diploma/internal/auth"
 	"github.com/patric-chuzhbe/diploma/internal/config"
 	"github.com/patric-chuzhbe/diploma/internal/db/postgresdb"
 	"github.com/patric-chuzhbe/diploma/internal/logger"
 	"github.com/patric-chuzhbe/diploma/internal/models"
 	"github.com/patric-chuzhbe/diploma/internal/router"
+	"github.com/patric-chuzhbe/diploma/internal/userbalancescalculator"
+	"go.uber.org/zap"
 	"net/http"
 	"os"
 	"os/signal"
@@ -59,6 +63,37 @@ type userOrderKeeper interface {
 		ctx context.Context,
 		userID string,
 	) ([]models.UserWithdrawal, error)
+
+	BeginTransaction() (*sql.Tx, error)
+
+	GetOrders(
+		ctx context.Context,
+		statusFilter []string,
+		ordersBatchSize int,
+		transaction *sql.Tx,
+	) (map[string]models.Order, error)
+
+	RollbackTransaction(transaction *sql.Tx) error
+
+	GetUsersByOrders(
+		ctx context.Context,
+		orderNumbers []string,
+		transaction *sql.Tx,
+	) ([]models.User, map[string][]string, error)
+
+	UpdateUsers(
+		ctx context.Context,
+		users []models.User,
+		outerTransaction *sql.Tx,
+	) error
+
+	CommitTransaction(transaction *sql.Tx) error
+
+	UpdateOrders(
+		ctx context.Context,
+		orders map[string]models.Order,
+		outerTransaction *sql.Tx,
+	) error
 }
 
 type storage interface {
@@ -68,9 +103,15 @@ type storage interface {
 }
 
 type App struct {
-	cfg         *config.Config
-	db          storage
-	httpHandler http.Handler
+	cfg                      *config.Config
+	db                       storage
+	httpHandler              http.Handler
+	userBalancesCalculator   *userbalancescalculator.UserBalancesCalculator
+	stopBalancesCalculator   context.CancelFunc
+	balancesCalculatorRunCtx context.Context
+	accrualsFetcher          *accrualsfetcher.AccrualsFetcher
+	stopAccrualsFetcher      context.CancelFunc
+	accrualsFetcherRunCtx    context.Context
 }
 
 func New() (*App, error) {
@@ -91,6 +132,38 @@ func New() (*App, error) {
 	if err != nil {
 		return nil, err
 	}
+
+	app.userBalancesCalculator = userbalancescalculator.New(
+		app.db,
+		app.cfg.DelayBetweenQueueFetchesForBalancesCalculator,
+		app.cfg.ErrorChannelCapacity,
+		app.cfg.OrdersBatchSizeForBalancesCalculator,
+	)
+	balancesCalculatorRunCtx, stopBalancesCalculator := context.WithCancel(context.Background())
+	app.stopBalancesCalculator = stopBalancesCalculator
+	app.balancesCalculatorRunCtx = balancesCalculatorRunCtx
+
+	app.userBalancesCalculator.ListenErrors(func(err error) {
+		logger.Log.Debugln("Error passed from the `app.userBalancesCalculator.ListenErrors()`:", zap.Error(err))
+	})
+
+	app.accrualsFetcher = accrualsfetcher.New(
+		app.db,
+		app.cfg.DelayBetweenQueueFetchesForAccrualsFetcher,
+		app.cfg.ErrorChannelCapacity,
+		app.cfg.OrdersBatchSizeForAccrualsFetcher,
+		app.cfg.SchemaForAccrualsFetcher,
+		app.cfg.HostForAccrualsFetcher,
+		app.cfg.PortForAccrualsFetcher,
+		app.cfg.HttpClientTimeoutForAccrualsFetcher,
+	)
+	accrualsFetcherRunCtx, stopAccrualsFetcher := context.WithCancel(context.Background())
+	app.stopAccrualsFetcher = stopAccrualsFetcher
+	app.accrualsFetcherRunCtx = accrualsFetcherRunCtx
+
+	app.accrualsFetcher.ListenErrors(func(err error) {
+		logger.Log.Debugln("Error passed from the `app.accrualsFetcher.ListenErrors()`:", zap.Error(err))
+	})
 
 	authCookieSigningSecretKey, err := base64.URLEncoding.DecodeString(app.cfg.AuthCookieSigningSecretKey)
 	if err != nil {
@@ -125,9 +198,14 @@ func (a *App) Run() error {
 		serverErrCh <- server.ListenAndServe()
 	}()
 
+	a.userBalancesCalculator.Run(a.balancesCalculatorRunCtx)
+	a.accrualsFetcher.Run(a.accrualsFetcherRunCtx)
+
 	select {
 	case <-ctx.Done():
 		logger.Log.Infoln("Received shutdown signal. Saving database and exiting...")
+		a.stopBalancesCalculator()
+		a.stopAccrualsFetcher()
 		shutdownCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 		defer cancel()
 

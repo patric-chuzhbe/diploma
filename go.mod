@@ -13,6 +13,7 @@ require (
 	github.com/joeljunstrom/go-luhn v0.0.0-20190413165225-1e071b33b576
 	github.com/joho/godotenv v1.5.1
 	github.com/pressly/goose/v3 v3.24.2
+	github.com/thoas/go-funk v0.9.3
 	go.uber.org/zap v1.27.0
 )
 

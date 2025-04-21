@@ -8,10 +8,370 @@ import (
 	_ "github.com/jackc/pgx/v5/stdlib"
 	"github.com/patric-chuzhbe/diploma/internal/models"
 	"github.com/pressly/goose/v3"
+	"strings"
 )
 
 type PostgresDB struct {
 	database *sql.DB
+}
+
+type queryer interface {
+	QueryContext(ctx context.Context, query string, args ...interface{}) (*sql.Rows, error)
+	QueryRowContext(ctx context.Context, query string, args ...any) *sql.Row
+}
+
+type executor interface {
+	ExecContext(ctx context.Context, query string, args ...interface{}) (sql.Result, error)
+}
+
+func (db *PostgresDB) UpdateOrders(
+	ctx context.Context,
+	orders map[string]models.Order,
+	outerTransaction *sql.Tx,
+) error {
+	innerTransaction := outerTransaction
+	var err error
+	if outerTransaction == nil {
+		innerTransaction, err = db.BeginTransaction()
+		if err != nil {
+			return fmt.Errorf(
+				"in internal/db/postgresdb/postgresdb.go/UpdateOrders(): error while `db.BeginTransaction()` calling: %w",
+				err,
+			)
+		}
+	}
+
+	for _, order := range orders {
+		_, err := innerTransaction.ExecContext(
+			ctx,
+			`
+				UPDATE orders
+					SET
+						status = $1,
+						accrual = $2
+					WHERE id = $3;
+			`,
+			order.Status,
+			*order.Accrual,
+			order.Number,
+		)
+		if err != nil {
+			if outerTransaction == nil {
+				err2 := db.RollbackTransaction(innerTransaction)
+				if err2 != nil {
+					return fmt.Errorf(
+						"in internal/db/postgresdb/postgresdb.go/UpdateOrders(): error while `db.RollbackTransaction()` calling: %w",
+						err2,
+					)
+				}
+			}
+			return fmt.Errorf(
+				"in internal/db/postgresdb/postgresdb.go/UpdateOrders(): error while `innerTransaction.ExecContext()` calling: %w",
+				err,
+			)
+		}
+	}
+
+	if outerTransaction == nil {
+		err := db.CommitTransaction(innerTransaction)
+		if err != nil {
+			return fmt.Errorf(
+				"in internal/db/postgresdb/postgresdb.go/UpdateOrders(): error while `db.CommitTransaction()` calling: %w",
+				err,
+			)
+		}
+	}
+
+	return nil
+}
+
+func (db *PostgresDB) CommitTransaction(transaction *sql.Tx) (err error) {
+	defer func() {
+		if r := recover(); r != nil {
+			err = fmt.Errorf("panic occurred while committing transaction: %v", r)
+		}
+	}()
+
+	return transaction.Commit()
+}
+
+func (db *PostgresDB) UpdateUsers(
+	ctx context.Context,
+	users []models.User,
+	outerTransaction *sql.Tx,
+) error {
+	innerTransaction := outerTransaction
+	var err error
+	if outerTransaction == nil {
+		innerTransaction, err = db.BeginTransaction()
+		if err != nil {
+			return fmt.Errorf(
+				"in internal/db/postgresdb/postgresdb.go/UpdateUsers(): error while `db.BeginTransaction()` calling: %w",
+				err,
+			)
+		}
+	}
+
+	for _, user := range users {
+		_, err := innerTransaction.ExecContext(
+			ctx,
+			`
+				UPDATE users 
+					SET 
+						login = $1,
+						pass = $2,
+						loyalty_balance = $3
+					WHERE id = $4
+			`,
+			user.Login,
+			user.Pass,
+			user.LoyaltyBalance,
+			user.ID,
+		)
+		if err != nil {
+			if outerTransaction == nil {
+				err2 := db.RollbackTransaction(innerTransaction)
+				if err2 != nil {
+					return fmt.Errorf(
+						"in internal/db/postgresdb/postgresdb.go/UpdateUsers(): error while `db.RollbackTransaction()` calling: %w",
+						err2,
+					)
+				}
+			}
+			return fmt.Errorf(
+				"in internal/db/postgresdb/postgresdb.go/UpdateUsers(): error while `innerTransaction.ExecContext()` calling: %w",
+				err,
+			)
+		}
+	}
+
+	if outerTransaction == nil {
+		err := db.CommitTransaction(innerTransaction)
+		if err != nil {
+			return fmt.Errorf(
+				"in internal/db/postgresdb/postgresdb.go/UpdateUsers(): error while `db.CommitTransaction()` calling: %w",
+				err,
+			)
+		}
+	}
+
+	return nil
+}
+
+func (db *PostgresDB) GetUsersByOrders(
+	ctx context.Context,
+	orderNumbers []string,
+	transaction *sql.Tx,
+) ([]models.User, map[string][]string, error) {
+	if len(orderNumbers) == 0 {
+		return []models.User{}, map[string][]string{}, nil
+	}
+
+	var database queryer
+
+	if transaction == nil {
+		database = db.database
+	} else {
+		database = transaction
+	}
+
+	statusesPlaceholders := make([]string, len(orderNumbers))
+	for i := range statusesPlaceholders {
+		statusesPlaceholders[i] = fmt.Sprintf("$%d", i+1)
+	}
+	orderNumbersPlaceholdersAsString := strings.Join(statusesPlaceholders, ",")
+
+	rows, err := database.QueryContext(
+		ctx,
+		fmt.Sprintf(
+			`
+				SELECT DISTINCT
+					users.id,
+					users.login,
+					users.pass,
+					users.loyalty_balance,
+					STRING_AGG(users_orders.order_id, ',') AS order_ids
+					FROM users
+						JOIN users_orders ON 
+							users_orders.user_id = users.id
+								AND users_orders.order_id IN (%s)
+					GROUP BY users.id;
+			`,
+			orderNumbersPlaceholdersAsString,
+		),
+		func(strSlice []string) []interface{} {
+			result := make([]interface{}, len(strSlice))
+			for i, v := range strSlice {
+				result[i] = v
+			}
+			return result
+		}(orderNumbers)...,
+	)
+	if err != nil {
+		return []models.User{}, map[string][]string{},
+			fmt.Errorf(
+				"in internal/db/postgresdb/postgresdb.go/GetUsersByOrders(): error while `database.QueryContext()` calling: %w",
+				err,
+			)
+	}
+	defer rows.Close()
+
+	users := []models.User{}
+	usersToOrdersMapping := map[string][]string{}
+	for rows.Next() {
+		var userID string
+		var login string
+		var pass string
+		var loyaltyBalance float32
+		var orderIDs string
+		err = rows.Scan(
+			&userID,
+			&login,
+			&pass,
+			&loyaltyBalance,
+			&orderIDs,
+		)
+		if err != nil {
+			return []models.User{}, map[string][]string{},
+				fmt.Errorf(
+					"in internal/db/postgresdb/postgresdb.go/GetUsersByOrders(): error while `rows.Scan()` calling: %w",
+					err,
+				)
+		}
+
+		users = append(users, models.User{
+			ID:             userID,
+			Login:          login,
+			Pass:           pass,
+			LoyaltyBalance: loyaltyBalance,
+		})
+
+		for _, orderID := range strings.Split(orderIDs, ",") {
+			usersToOrdersMapping[userID] = append(usersToOrdersMapping[userID], orderID)
+		}
+	}
+
+	err = rows.Err()
+	if err != nil {
+		return []models.User{}, map[string][]string{},
+			fmt.Errorf(
+				"in internal/db/postgresdb/postgresdb.go/GetUsersByOrders(): error while `rows.Err()` calling: %w",
+				err,
+			)
+	}
+
+	return users, usersToOrdersMapping, nil
+}
+
+func (db *PostgresDB) RollbackTransaction(transaction *sql.Tx) error {
+	return transaction.Rollback()
+}
+
+func (db *PostgresDB) GetOrders(
+	ctx context.Context,
+	statusFilter []string,
+	ordersBatchSize int,
+	transaction *sql.Tx,
+) (map[string]models.Order, error) {
+	var database queryer
+
+	if transaction == nil {
+		database = db.database
+	} else {
+		database = transaction
+	}
+
+	if len(statusFilter) == 0 {
+		return map[string]models.Order{}, nil
+	}
+
+	statusesPlaceholders := make([]string, len(statusFilter))
+	for i := range statusesPlaceholders {
+		statusesPlaceholders[i] = fmt.Sprintf("$%d", i+1)
+	}
+	statusesPlaceholdersAsString := strings.Join(statusesPlaceholders, ",")
+
+	rows, err := database.QueryContext(
+		ctx,
+		fmt.Sprintf(
+			`
+				SELECT 
+				    id,
+					status,
+					accrual,
+					uploaded_at
+					FROM orders
+					WHERE status IN (%s)
+					ORDER BY uploaded_at ASC
+					LIMIT %d;
+			`,
+			statusesPlaceholdersAsString,
+			ordersBatchSize,
+		),
+		func(strSlice []string) []interface{} {
+			result := make([]interface{}, len(strSlice))
+			for i, v := range strSlice {
+				result[i] = v
+			}
+			return result
+		}(statusFilter)...,
+	)
+	if err != nil {
+		return nil,
+			fmt.Errorf(
+				"in internal/db/postgresdb/postgresdb.go/GetOrders(): error while `database.QueryContext()` calling: %w",
+				err,
+			)
+	}
+	defer rows.Close()
+
+	result := map[string]models.Order{}
+	for rows.Next() {
+		var number string
+		var status string
+		var accrual sql.NullFloat64
+		var uploadedAt string
+		err = rows.Scan(
+			&number,
+			&status,
+			&accrual,
+			&uploadedAt,
+		)
+		if err != nil {
+			return nil,
+				fmt.Errorf(
+					"in internal/db/postgresdb/postgresdb.go/GetOrders(): error while `rows.Scan()` calling: %w",
+					err,
+				)
+		}
+
+		accrualValue := float32(0)
+		if accrual.Valid {
+			accrualValue = float32(accrual.Float64)
+		}
+
+		result[number] = models.Order{
+			Number:     number,
+			Status:     status,
+			Accrual:    &accrualValue,
+			UploadedAt: uploadedAt,
+		}
+	}
+
+	err = rows.Err()
+	if err != nil {
+		return nil,
+			fmt.Errorf(
+				"in internal/db/postgresdb/postgresdb.go/GetOrders(): error while `rows.Err()` calling: %w",
+				err,
+			)
+	}
+
+	return result, nil
+}
+
+func (db *PostgresDB) BeginTransaction() (*sql.Tx, error) {
+	return db.database.Begin()
 }
 
 func (db *PostgresDB) GetUserWithdrawals(
@@ -34,7 +394,11 @@ func (db *PostgresDB) GetUserWithdrawals(
 		userID,
 	)
 	if err != nil {
-		return nil, err
+		return nil,
+			fmt.Errorf(
+				"in internal/db/postgresdb/postgresdb.go/GetUserWithdrawals(): error while `db.database.QueryContext()` calling: %w",
+				err,
+			)
 	}
 	defer rows.Close()
 
@@ -49,7 +413,11 @@ func (db *PostgresDB) GetUserWithdrawals(
 			&processedAt,
 		)
 		if err != nil {
-			return nil, err
+			return nil,
+				fmt.Errorf(
+					"in internal/db/postgresdb/postgresdb.go/GetUserWithdrawals(): error while `rows.Scan()` calling: %w",
+					err,
+				)
 		}
 
 		result = append(
@@ -64,7 +432,11 @@ func (db *PostgresDB) GetUserWithdrawals(
 
 	err = rows.Err()
 	if err != nil {
-		return nil, err
+		return nil,
+			fmt.Errorf(
+				"in internal/db/postgresdb/postgresdb.go/GetUserWithdrawals(): error while `rows.Err()` calling: %w",
+				err,
+			)
 	}
 
 	return result, nil
@@ -78,7 +450,10 @@ func (db *PostgresDB) Withdraw(
 ) error {
 	transaction, err := db.database.Begin()
 	if err != nil {
-		return err
+		return fmt.Errorf(
+			"in internal/db/postgresdb/postgresdb.go/Withdraw(): error while `db.database.Begin()` calling: %w",
+			err,
+		)
 	}
 
 	var loyaltyBalance float32
@@ -90,15 +465,24 @@ func (db *PostgresDB) Withdraw(
 	if err != nil {
 		err2 := transaction.Rollback()
 		if err2 != nil {
-			return err2
+			return fmt.Errorf(
+				"in internal/db/postgresdb/postgresdb.go/Withdraw(): error while `transaction.Rollback()` calling: %w",
+				err2,
+			)
 		}
-		return err
+		return fmt.Errorf(
+			"in internal/db/postgresdb/postgresdb.go/Withdraw(): error while `transaction.QueryRowContext()` calling: %w",
+			err,
+		)
 	}
 
 	if loyaltyBalance < withdrawSum {
 		err = transaction.Rollback()
 		if err != nil {
-			return err
+			return fmt.Errorf(
+				"in internal/db/postgresdb/postgresdb.go/Withdraw(): error while `transaction.Rollback()` calling: %w",
+				err,
+			)
 		}
 		return models.ErrNotEnoughBalance
 	}
@@ -119,7 +503,10 @@ func (db *PostgresDB) Withdraw(
 	if errors.Is(err, sql.ErrNoRows) {
 		err2 := transaction.Rollback()
 		if err2 != nil {
-			return err2
+			return fmt.Errorf(
+				"in internal/db/postgresdb/postgresdb.go/Withdraw(): error while `transaction.Rollback()` calling: %w",
+				err2,
+			)
 		}
 		return models.ErrAlreadyWithdrawn
 	}
@@ -127,9 +514,15 @@ func (db *PostgresDB) Withdraw(
 	if err != nil {
 		err2 := transaction.Rollback()
 		if err2 != nil {
-			return err2
+			return fmt.Errorf(
+				"in internal/db/postgresdb/postgresdb.go/Withdraw(): error while `transaction.Rollback()` calling: %w",
+				err2,
+			)
 		}
-		return err
+		return fmt.Errorf(
+			"in internal/db/postgresdb/postgresdb.go/Withdraw(): error while `transaction.QueryRowContext()` calling: %w",
+			err,
+		)
 	}
 
 	_, err = transaction.ExecContext(
@@ -144,9 +537,15 @@ func (db *PostgresDB) Withdraw(
 	if err != nil {
 		err2 := transaction.Rollback()
 		if err2 != nil {
-			return err2
+			return fmt.Errorf(
+				"in internal/db/postgresdb/postgresdb.go/Withdraw(): error while `transaction.Rollback()` calling: %w",
+				err2,
+			)
 		}
-		return err
+		return fmt.Errorf(
+			"in internal/db/postgresdb/postgresdb.go/Withdraw(): error while `transaction.ExecContext()` calling: %w",
+			err,
+		)
 	}
 
 	loyaltyBalance -= withdrawSum
@@ -160,18 +559,30 @@ func (db *PostgresDB) Withdraw(
 	if err != nil {
 		err2 := transaction.Rollback()
 		if err2 != nil {
-			return err2
+			return fmt.Errorf(
+				"in internal/db/postgresdb/postgresdb.go/Withdraw(): error while `transaction.Rollback()` calling: %w",
+				err2,
+			)
 		}
-		return err
+		return fmt.Errorf(
+			"in internal/db/postgresdb/postgresdb.go/Withdraw(): error while `transaction.ExecContext()` calling: %w",
+			err,
+		)
 	}
 
 	err = transaction.Commit()
 	if err != nil {
 		err2 := transaction.Rollback()
 		if err2 != nil {
-			return err2
+			return fmt.Errorf(
+				"in internal/db/postgresdb/postgresdb.go/Withdraw(): error while `transaction.Rollback()` calling: %w",
+				err2,
+			)
 		}
-		return err
+		return fmt.Errorf(
+			"in internal/db/postgresdb/postgresdb.go/Withdraw(): error while `transaction.Commit()` calling: %w",
+			err,
+		)
 	}
 
 	return nil
@@ -211,7 +622,11 @@ func (db *PostgresDB) GetUserBalanceAndWithdrawals(
 		return nil, nil
 	}
 	if err != nil {
-		return nil, err
+		return nil,
+			fmt.Errorf(
+				"in internal/db/postgresdb/postgresdb.go/GetUserBalanceAndWithdrawals(): error while `row.Scan()` calling: %w",
+				err,
+			)
 	}
 
 	withdrawalsSumValue := float32(0)
@@ -246,7 +661,11 @@ func (db *PostgresDB) GetUserOrders(
 		userID,
 	)
 	if err != nil {
-		return nil, err
+		return nil,
+			fmt.Errorf(
+				"in internal/db/postgresdb/postgresdb.go/GetUserOrders(): error while `db.database.QueryContext()` calling: %w",
+				err,
+			)
 	}
 	defer rows.Close()
 
@@ -263,7 +682,11 @@ func (db *PostgresDB) GetUserOrders(
 			&accrual,
 		)
 		if err != nil {
-			return nil, err
+			return nil,
+				fmt.Errorf(
+					"in internal/db/postgresdb/postgresdb.go/GetUserOrders(): error while `rows.Scan()` calling: %w",
+					err,
+				)
 		}
 
 		var accrualPtr *float32
@@ -285,7 +708,11 @@ func (db *PostgresDB) GetUserOrders(
 
 	err = rows.Err()
 	if err != nil {
-		return nil, err
+		return nil,
+			fmt.Errorf(
+				"in internal/db/postgresdb/postgresdb.go/GetUserOrders(): error while `rows.Err()` calling: %w",
+				err,
+			)
 	}
 
 	return result, nil
@@ -319,7 +746,11 @@ func (db *PostgresDB) SaveNewOrderForUser(
 	}
 
 	if err != nil {
-		return "", err
+		return "",
+			fmt.Errorf(
+				"in internal/db/postgresdb/postgresdb.go/SaveNewOrderForUser(): error while `db.database.QueryRowContext()` calling: %w",
+				err,
+			)
 	}
 
 	return actualUserID, models.ErrOrderAlreadyExists
@@ -344,7 +775,11 @@ func (db *PostgresDB) GetUserByID(
 		return &models.User{}, nil
 	}
 	if err != nil {
-		return &models.User{}, err
+		return &models.User{},
+			fmt.Errorf(
+				"in internal/db/postgresdb/postgresdb.go/GetUserByID(): error while `row.Scan()` calling: %w",
+				err,
+			)
 	}
 
 	return &models.User{ID: userIDFromDB}, nil
@@ -363,7 +798,11 @@ func (db *PostgresDB) GetUserIDByLoginAndPassword(
 	}
 
 	if err != nil {
-		return "", err
+		return "",
+			fmt.Errorf(
+				"in internal/db/postgresdb/postgresdb.go/GetUserIDByLoginAndPassword(): error while `db.database.QueryRowContext()` calling: %w",
+				err,
+			)
 	}
 
 	return userID, nil
@@ -387,7 +826,11 @@ func (db *PostgresDB) CreateUser(
 	}
 
 	if err != nil {
-		return "", err
+		return "",
+			fmt.Errorf(
+				"in internal/db/postgresdb/postgresdb.go/CreateUser(): error while `db.database.QueryRowContext()` calling: %w",
+				err,
+			)
 	}
 
 	return userID, nil
@@ -396,7 +839,11 @@ func (db *PostgresDB) CreateUser(
 func New(databaseDSN string, migrationsDir string) (*PostgresDB, error) {
 	database, err := sql.Open("pgx", databaseDSN)
 	if err != nil {
-		return nil, err
+		return nil,
+			fmt.Errorf(
+				"in internal/db/postgresdb/postgresdb.go/New(): error while `sql.Open()` calling: %w",
+				err,
+			)
 	}
 
 	result := &PostgresDB{
@@ -404,11 +851,19 @@ func New(databaseDSN string, migrationsDir string) (*PostgresDB, error) {
 	}
 
 	if err := goose.SetDialect("postgres"); err != nil {
-		return nil, fmt.Errorf("failed to set dialect:  %w", err)
+		return nil,
+			fmt.Errorf(
+				"in internal/db/postgresdb/postgresdb.go/New(): error while `goose.SetDialect()` calling: %w",
+				err,
+			)
 	}
 
 	if err := goose.Up(result.database, migrationsDir); err != nil {
-		return nil, fmt.Errorf("failed to run migrations: %w", err)
+		return nil,
+			fmt.Errorf(
+				"in internal/db/postgresdb/postgresdb.go/New(): error while `goose.Up()` calling: %w",
+				err,
+			)
 	}
 
 	return result, nil
@@ -417,7 +872,10 @@ func New(databaseDSN string, migrationsDir string) (*PostgresDB, error) {
 func (db *PostgresDB) Close() error {
 	err := db.database.Close()
 	if err != nil {
-		return err
+		return fmt.Errorf(
+			"in internal/db/postgresdb/postgresdb.go/Close(): error while `db.database.Close()` calling: %w",
+			err,
+		)
 	}
 
 	return nil
