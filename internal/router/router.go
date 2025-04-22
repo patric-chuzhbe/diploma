@@ -9,6 +9,7 @@ import (
 	"github.com/go-playground/validator/v10"
 	"github.com/joeljunstrom/go-luhn"
 	"github.com/patric-chuzhbe/diploma/internal/auth"
+	"github.com/patric-chuzhbe/diploma/internal/gzippedhttp"
 	"github.com/patric-chuzhbe/diploma/internal/logger"
 	"github.com/patric-chuzhbe/diploma/internal/models"
 	"go.uber.org/zap"
@@ -263,7 +264,6 @@ func (theRouter router) PostApiuserlogin(response http.ResponseWriter, request *
 	if request.Method != http.MethodPost {
 		logger.Log.Debug("got request with bad method", zap.String("method", request.Method))
 		response.WriteHeader(http.StatusMethodNotAllowed)
-
 		return
 	}
 
@@ -271,7 +271,6 @@ func (theRouter router) PostApiuserlogin(response http.ResponseWriter, request *
 	if err := json.NewDecoder(request.Body).Decode(&requestDTO); err != nil {
 		logger.Log.Debugln("cannot decode request JSON body", zap.Error(err))
 		response.WriteHeader(http.StatusInternalServerError)
-
 		return
 	}
 
@@ -280,7 +279,6 @@ func (theRouter router) PostApiuserlogin(response http.ResponseWriter, request *
 	if err != nil {
 		logger.Log.Debugln("error while `validate.RegisterValidation()` calling: ", zap.Error(err))
 		response.WriteHeader(http.StatusInternalServerError)
-
 		return
 	}
 	if err := validate.Struct(requestDTO); err != nil {
@@ -324,7 +322,6 @@ func (theRouter router) PostApiuserregister(response http.ResponseWriter, reques
 	if request.Method != http.MethodPost {
 		logger.Log.Debug("got request with bad method", zap.String("method", request.Method))
 		response.WriteHeader(http.StatusMethodNotAllowed)
-
 		return
 	}
 
@@ -332,7 +329,6 @@ func (theRouter router) PostApiuserregister(response http.ResponseWriter, reques
 	if err := json.NewDecoder(request.Body).Decode(&requestDTO); err != nil {
 		logger.Log.Debugln("cannot decode request JSON body", zap.Error(err))
 		response.WriteHeader(http.StatusInternalServerError)
-
 		return
 	}
 
@@ -341,7 +337,6 @@ func (theRouter router) PostApiuserregister(response http.ResponseWriter, reques
 	if err != nil {
 		logger.Log.Debugln("error while `validate.RegisterValidation()` calling: ", zap.Error(err))
 		response.WriteHeader(http.StatusInternalServerError)
-
 		return
 	}
 	if err := validate.Struct(requestDTO); err != nil {
@@ -400,6 +395,7 @@ func New(
 
 	r.Use(
 		logger.WithLoggingHTTPMiddleware,
+		gzippedhttp.UngzipJSONAndTextHTMLRequest,
 	)
 
 	r.Get(`/`, myRouter.GetIndex)
@@ -408,15 +404,27 @@ func New(
 
 	r.Post(`/api/user/login`, myRouter.PostApiuserlogin)
 
-	r.With(auth.AuthenticateUser).Post(`/api/user/orders`, myRouter.PostApiuserorders)
+	r.With(
+		gzippedhttp.GzipResponse,
+		auth.AuthenticateUser,
+	).Post(`/api/user/orders`, myRouter.PostApiuserorders)
 
-	r.With(auth.AuthenticateUser).Get(`/api/user/orders`, myRouter.GetApiuserorders)
+	r.With(
+		gzippedhttp.GzipResponse,
+		auth.AuthenticateUser,
+	).Get(`/api/user/orders`, myRouter.GetApiuserorders)
 
-	r.With(auth.AuthenticateUser).Get(`/api/user/balance`, myRouter.GetApiuserbalance)
+	r.With(
+		gzippedhttp.GzipResponse,
+		auth.AuthenticateUser,
+	).Get(`/api/user/balance`, myRouter.GetApiuserbalance)
 
 	r.With(auth.AuthenticateUser).Post(`/api/user/balance/withdraw`, myRouter.PostApiuserbalancewithdraw)
 
-	r.With(auth.AuthenticateUser).Get(`/api/user/withdrawals`, myRouter.GetApiuserwithdrawals)
+	r.With(
+		gzippedhttp.GzipResponse,
+		auth.AuthenticateUser,
+	).Get(`/api/user/withdrawals`, myRouter.GetApiuserwithdrawals)
 
 	return r
 }
