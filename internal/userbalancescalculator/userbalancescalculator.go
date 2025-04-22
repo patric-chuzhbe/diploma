@@ -10,9 +10,15 @@ import (
 	"time"
 )
 
-type storage interface {
+type transactioner interface {
 	BeginTransaction() (*sql.Tx, error)
 
+	RollbackTransaction(transaction *sql.Tx) error
+
+	CommitTransaction(transaction *sql.Tx) (err error)
+}
+
+type userOrdersKeeper interface {
 	GetOrders(
 		ctx context.Context,
 		statusFilter []string,
@@ -20,27 +26,31 @@ type storage interface {
 		transaction *sql.Tx,
 	) (map[string]models.Order, error)
 
-	RollbackTransaction(transaction *sql.Tx) error
-
 	GetUsersByOrders(
 		ctx context.Context,
 		orderNumbers []string,
 		transaction *sql.Tx,
 	) ([]models.User, map[string][]string, error)
 
-	UpdateUsers(
-		ctx context.Context,
-		users []models.User,
-		outerTransaction *sql.Tx,
-	) error
-
-	CommitTransaction(transaction *sql.Tx) (err error)
-
 	UpdateOrders(
 		ctx context.Context,
 		orders map[string]models.Order,
 		outerTransaction *sql.Tx,
 	) error
+}
+
+type usersKeeper interface {
+	UpdateUsers(
+		ctx context.Context,
+		users []models.User,
+		outerTransaction *sql.Tx,
+	) error
+}
+
+type storage interface {
+	transactioner
+	userOrdersKeeper
+	usersKeeper
 }
 
 type UserBalancesCalculator struct {

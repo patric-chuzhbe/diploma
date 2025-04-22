@@ -18,7 +18,7 @@ import (
 	"regexp"
 )
 
-type storage interface {
+type usersKeeper interface {
 	CreateUser(
 		ctx context.Context,
 		usr *models.User,
@@ -28,7 +28,9 @@ type storage interface {
 		ctx context.Context,
 		usr *models.User,
 	) (string, error)
+}
 
+type userOrdersKeeper interface {
 	SaveNewOrderForUser(
 		ctx context.Context,
 		userID string,
@@ -39,7 +41,9 @@ type storage interface {
 		ctx context.Context,
 		userID string,
 	) ([]models.Order, error)
+}
 
+type userWithdrawalsKeeper interface {
 	GetUserBalanceAndWithdrawals(
 		ctx context.Context,
 		userID string,
@@ -56,6 +60,12 @@ type storage interface {
 		ctx context.Context,
 		userID string,
 	) ([]models.UserWithdrawal, error)
+}
+
+type storage interface {
+	usersKeeper
+	userOrdersKeeper
+	userWithdrawalsKeeper
 }
 
 type authenticator interface {

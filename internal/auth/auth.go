@@ -10,7 +10,7 @@ import (
 	"net/http"
 )
 
-type userKeeper interface {
+type usersKeeper interface {
 	CreateUser(ctx context.Context, usr *models.User) (string, error)
 
 	GetUserByID(
@@ -20,7 +20,7 @@ type userKeeper interface {
 }
 
 type Auth struct {
-	db                         userKeeper
+	db                         usersKeeper
 	authCookieName             string
 	authCookieSigningSecretKey []byte
 }
@@ -93,7 +93,7 @@ func (a *Auth) AuthenticateUser(h http.Handler) http.Handler {
 }
 
 func New(
-	db userKeeper,
+	db usersKeeper,
 	authCookieName string,
 	authCookieSigningSecretKey []byte,
 ) *Auth {

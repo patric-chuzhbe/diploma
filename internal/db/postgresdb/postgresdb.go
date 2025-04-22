@@ -15,13 +15,9 @@ type PostgresDB struct {
 	database *sql.DB
 }
 
-type queryer interface {
+type querier interface {
 	QueryContext(ctx context.Context, query string, args ...interface{}) (*sql.Rows, error)
 	QueryRowContext(ctx context.Context, query string, args ...any) *sql.Row
-}
-
-type executor interface {
-	ExecContext(ctx context.Context, query string, args ...interface{}) (sql.Result, error)
 }
 
 func (db *PostgresDB) UpdateOrders(
@@ -167,7 +163,7 @@ func (db *PostgresDB) GetUsersByOrders(
 		return []models.User{}, map[string][]string{}, nil
 	}
 
-	var database queryer
+	var database querier
 
 	if transaction == nil {
 		database = db.database
@@ -273,7 +269,7 @@ func (db *PostgresDB) GetOrders(
 	ordersBatchSize int,
 	transaction *sql.Tx,
 ) (map[string]models.Order, error) {
-	var database queryer
+	var database querier
 
 	if transaction == nil {
 		database = db.database

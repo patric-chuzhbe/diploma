@@ -21,7 +21,7 @@ import (
 	"time"
 )
 
-type userKeeper interface {
+type usersKeeper interface {
 	CreateUser(ctx context.Context, usr *models.User) (string, error)
 
 	GetUserIDByLoginAndPassword(
@@ -33,20 +33,15 @@ type userKeeper interface {
 		ctx context.Context,
 		userID string,
 	) (*models.User, error)
+
+	UpdateUsers(
+		ctx context.Context,
+		users []models.User,
+		outerTransaction *sql.Tx,
+	) error
 }
 
-type userOrderKeeper interface {
-	SaveNewOrderForUser(
-		ctx context.Context,
-		userID string,
-		orderNumber string,
-	) (string, error)
-
-	GetUserOrders(
-		ctx context.Context,
-		userID string,
-	) ([]models.Order, error)
-
+type userWithdrawalsKeeper interface {
 	GetUserBalanceAndWithdrawals(
 		ctx context.Context,
 		userID string,
@@ -63,8 +58,27 @@ type userOrderKeeper interface {
 		ctx context.Context,
 		userID string,
 	) ([]models.UserWithdrawal, error)
+}
 
+type transactioner interface {
 	BeginTransaction() (*sql.Tx, error)
+
+	RollbackTransaction(transaction *sql.Tx) error
+
+	CommitTransaction(transaction *sql.Tx) error
+}
+
+type userOrdersKeeper interface {
+	SaveNewOrderForUser(
+		ctx context.Context,
+		userID string,
+		orderNumber string,
+	) (string, error)
+
+	GetUserOrders(
+		ctx context.Context,
+		userID string,
+	) ([]models.Order, error)
 
 	GetOrders(
 		ctx context.Context,
@@ -73,21 +87,11 @@ type userOrderKeeper interface {
 		transaction *sql.Tx,
 	) (map[string]models.Order, error)
 
-	RollbackTransaction(transaction *sql.Tx) error
-
 	GetUsersByOrders(
 		ctx context.Context,
 		orderNumbers []string,
 		transaction *sql.Tx,
 	) ([]models.User, map[string][]string, error)
-
-	UpdateUsers(
-		ctx context.Context,
-		users []models.User,
-		outerTransaction *sql.Tx,
-	) error
-
-	CommitTransaction(transaction *sql.Tx) error
 
 	UpdateOrders(
 		ctx context.Context,
@@ -97,8 +101,11 @@ type userOrderKeeper interface {
 }
 
 type storage interface {
-	userKeeper
-	userOrderKeeper
+	usersKeeper
+	userWithdrawalsKeeper
+	transactioner
+	userOrdersKeeper
+
 	Close() error
 }
 

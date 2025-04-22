@@ -14,9 +14,15 @@ import (
 	"time"
 )
 
-type storage interface {
+type transactioner interface {
 	BeginTransaction() (*sql.Tx, error)
 
+	RollbackTransaction(transaction *sql.Tx) error
+
+	CommitTransaction(transaction *sql.Tx) (err error)
+}
+
+type userOrdersKeeper interface {
 	GetOrders(
 		ctx context.Context,
 		statusFilter []string,
@@ -24,15 +30,16 @@ type storage interface {
 		transaction *sql.Tx,
 	) (map[string]models.Order, error)
 
-	RollbackTransaction(transaction *sql.Tx) error
-
 	UpdateOrders(
 		ctx context.Context,
 		orders map[string]models.Order,
 		outerTransaction *sql.Tx,
 	) error
+}
 
-	CommitTransaction(transaction *sql.Tx) (err error)
+type storage interface {
+	transactioner
+	userOrdersKeeper
 }
 
 type AccrualsFetcher struct {
