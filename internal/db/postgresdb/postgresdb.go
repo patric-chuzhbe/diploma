@@ -242,9 +242,7 @@ func (db *PostgresDB) GetUsersByOrders(
 			LoyaltyBalance: loyaltyBalance,
 		})
 
-		for _, orderID := range strings.Split(orderIDs, ",") {
-			usersToOrdersMapping[userID] = append(usersToOrdersMapping[userID], orderID)
-		}
+		usersToOrdersMapping[userID] = append(usersToOrdersMapping[userID], strings.Split(orderIDs, ",")...)
 	}
 
 	err = rows.Err()

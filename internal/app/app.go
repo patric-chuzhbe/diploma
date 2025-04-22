@@ -159,7 +159,7 @@ func New() (*App, error) {
 		app.cfg.DelayBetweenQueueFetchesForAccrualsFetcher,
 		app.cfg.ErrorChannelCapacity,
 		app.cfg.OrdersBatchSizeForAccrualsFetcher,
-		app.cfg.HttpClientTimeoutForAccrualsFetcher,
+		app.cfg.HTTPClientTimeoutForAccrualsFetcher,
 		app.cfg.AccrualSystemAddress,
 	)
 	accrualsFetcherRunCtx, stopAccrualsFetcher := context.WithCancel(context.Background())

@@ -297,7 +297,7 @@ func (theRouter router) PostApiuserlogin(response http.ResponseWriter, request *
 		return
 	}
 
-	userId, err := theRouter.db.GetUserIDByLoginAndPassword(
+	userID, err := theRouter.db.GetUserIDByLoginAndPassword(
 		request.Context(),
 		&models.User{
 			Login: requestDTO.Login,
@@ -309,12 +309,12 @@ func (theRouter router) PostApiuserlogin(response http.ResponseWriter, request *
 		response.WriteHeader(http.StatusInternalServerError)
 		return
 	}
-	if userId == "" {
+	if userID == "" {
 		response.WriteHeader(http.StatusUnauthorized)
 		return
 	}
 
-	err = theRouter.auth.SetAuthData(userId, response)
+	err = theRouter.auth.SetAuthData(userID, response)
 	if err != nil {
 		logger.Log.Debugln("error while setting auth data", zap.Error(err))
 		response.WriteHeader(http.StatusInternalServerError)
@@ -355,7 +355,7 @@ func (theRouter router) PostApiuserregister(response http.ResponseWriter, reques
 		return
 	}
 
-	userId, err := theRouter.db.CreateUser(
+	userID, err := theRouter.db.CreateUser(
 		request.Context(),
 		&models.User{
 			Login: requestDTO.Login,
@@ -373,7 +373,7 @@ func (theRouter router) PostApiuserregister(response http.ResponseWriter, reques
 		return
 	}
 
-	err = theRouter.auth.SetAuthData(userId, response)
+	err = theRouter.auth.SetAuthData(userID, response)
 	if err != nil {
 		logger.Log.Debugln("error while setting auth data", zap.Error(err))
 		response.WriteHeader(http.StatusInternalServerError)

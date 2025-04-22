@@ -22,8 +22,8 @@ type Config struct {
 	DelayBetweenQueueFetchesForAccrualsFetcher    time.Duration `env:"DELAY_BETWEEN_QUEUE_FETCHES_FOR_ACCRUALS_FETCHER" envDefault:"5s"`
 	OrdersBatchSizeForBalancesCalculator          int           `env:"ORDERS_BATCH_SIZE_FOR_BALANCES_CALCULATOR" envDefault:"500"`
 	OrdersBatchSizeForAccrualsFetcher             int           `env:"ORDERS_BATCH_SIZE_FOR_ACCRUALS_FETCHER" envDefault:"500"`
-	HttpClientTimeoutForAccrualsFetcher           time.Duration `env:"HTTP_CLIENT_TIMEOUT_FOR_ACCRUALS_FETCHER" envDefault:"10s"`
-	AccrualSystemAddress                          string        `env:"ACCRUAL_SYSTEM_ADDRESS" envDefault:":8080" validate:"hostname_port"`
+	HTTPClientTimeoutForAccrualsFetcher           time.Duration `env:"HTTP_CLIENT_TIMEOUT_FOR_ACCRUALS_FETCHER" envDefault:"10s"`
+	AccrualSystemAddress                          string        `env:"ACCRUAL_SYSTEM_ADDRESS" envDefault:":8080" validate:"url"`
 }
 
 func validateFilePath(fieldLevel validator.FieldLevel) bool {
