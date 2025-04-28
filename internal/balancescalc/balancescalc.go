@@ -1,4 +1,4 @@
-package userbalancescalculator
+package balancescalc
 
 import (
 	"context"
@@ -64,7 +64,7 @@ func (c *UserBalancesCalculator) calcBalances(ctx context.Context) {
 	transaction, err := c.db.BeginTransaction()
 	if err != nil {
 		c.errorChannel <- fmt.Errorf(
-			"in internal/userbalancescalculator/userbalancescalculator.go/calcBalances(): error while `c.db.BeginTransaction()` calling: %w",
+			"in internal/userbalancescalculator/balancescalc.go/calcBalances(): error while `c.db.BeginTransaction()` calling: %w",
 			err,
 		)
 		return
@@ -75,13 +75,13 @@ func (c *UserBalancesCalculator) calcBalances(ctx context.Context) {
 		err2 := c.db.RollbackTransaction(transaction)
 		if err2 != nil {
 			c.errorChannel <- fmt.Errorf(
-				"in internal/userbalancescalculator/userbalancescalculator.go/calcBalances(): error while `c.db.RollbackTransaction()` calling: %w",
+				"in internal/userbalancescalculator/balancescalc.go/calcBalances(): error while `c.db.RollbackTransaction()` calling: %w",
 				err2,
 			)
 			return
 		}
 		c.errorChannel <- fmt.Errorf(
-			"in internal/userbalancescalculator/userbalancescalculator.go/calcBalances(): error while `c.db.GetOrders()` calling: %w",
+			"in internal/userbalancescalculator/balancescalc.go/calcBalances(): error while `c.db.GetOrders()` calling: %w",
 			err,
 		)
 		return
@@ -98,13 +98,13 @@ func (c *UserBalancesCalculator) calcBalances(ctx context.Context) {
 		err2 := c.db.RollbackTransaction(transaction)
 		if err2 != nil {
 			c.errorChannel <- fmt.Errorf(
-				"in internal/userbalancescalculator/userbalancescalculator.go/calcBalances(): error while `c.db.RollbackTransaction()` calling: %w",
+				"in internal/userbalancescalculator/balancescalc.go/calcBalances(): error while `c.db.RollbackTransaction()` calling: %w",
 				err2,
 			)
 			return
 		}
 		c.errorChannel <- fmt.Errorf(
-			"in internal/userbalancescalculator/userbalancescalculator.go/calcBalances(): error while `c.db.GetUsersByOrders()` calling: %w",
+			"in internal/userbalancescalculator/balancescalc.go/calcBalances(): error while `c.db.GetUsersByOrders()` calling: %w",
 			err,
 		)
 		return
@@ -125,13 +125,13 @@ func (c *UserBalancesCalculator) calcBalances(ctx context.Context) {
 		err2 := c.db.RollbackTransaction(transaction)
 		if err2 != nil {
 			c.errorChannel <- fmt.Errorf(
-				"in internal/userbalancescalculator/userbalancescalculator.go/calcBalances(): error while `c.db.RollbackTransaction()` calling: %w",
+				"in internal/userbalancescalculator/balancescalc.go/calcBalances(): error while `c.db.RollbackTransaction()` calling: %w",
 				err2,
 			)
 			return
 		}
 		c.errorChannel <- fmt.Errorf(
-			"in internal/userbalancescalculator/userbalancescalculator.go/calcBalances(): error while `c.db.UpdateUsers()` calling: %w",
+			"in internal/userbalancescalculator/balancescalc.go/calcBalances(): error while `c.db.UpdateUsers()` calling: %w",
 			err,
 		)
 		return
@@ -142,13 +142,13 @@ func (c *UserBalancesCalculator) calcBalances(ctx context.Context) {
 		err2 := c.db.RollbackTransaction(transaction)
 		if err2 != nil {
 			c.errorChannel <- fmt.Errorf(
-				"in internal/userbalancescalculator/userbalancescalculator.go/calcBalances(): error while `c.db.RollbackTransaction()` calling: %w",
+				"in internal/userbalancescalculator/balancescalc.go/calcBalances(): error while `c.db.RollbackTransaction()` calling: %w",
 				err2,
 			)
 			return
 		}
 		c.errorChannel <- fmt.Errorf(
-			"in internal/userbalancescalculator/userbalancescalculator.go/calcBalances(): error while `c.db.UpdateOrders()` calling: %w",
+			"in internal/userbalancescalculator/balancescalc.go/calcBalances(): error while `c.db.UpdateOrders()` calling: %w",
 			err,
 		)
 		return
@@ -159,13 +159,13 @@ func (c *UserBalancesCalculator) calcBalances(ctx context.Context) {
 		err2 := c.db.RollbackTransaction(transaction)
 		if err2 != nil {
 			c.errorChannel <- fmt.Errorf(
-				"in internal/userbalancescalculator/userbalancescalculator.go/calcBalances(): error while `c.db.RollbackTransaction()` calling: %w",
+				"in internal/userbalancescalculator/balancescalc.go/calcBalances(): error while `c.db.RollbackTransaction()` calling: %w",
 				err2,
 			)
 			return
 		}
 		c.errorChannel <- fmt.Errorf(
-			"in internal/userbalancescalculator/userbalancescalculator.go/calcBalances(): error while `c.db.CommitTransaction()` calling: %w",
+			"in internal/userbalancescalculator/balancescalc.go/calcBalances(): error while `c.db.CommitTransaction()` calling: %w",
 			err,
 		)
 		return

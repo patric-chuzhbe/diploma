@@ -7,12 +7,12 @@ import (
 	"fmt"
 	"github.com/patric-chuzhbe/diploma/internal/accrualsfetcher"
 	"github.com/patric-chuzhbe/diploma/internal/auth"
+	"github.com/patric-chuzhbe/diploma/internal/balancescalc"
 	"github.com/patric-chuzhbe/diploma/internal/config"
 	"github.com/patric-chuzhbe/diploma/internal/db/postgresdb"
 	"github.com/patric-chuzhbe/diploma/internal/logger"
 	"github.com/patric-chuzhbe/diploma/internal/models"
 	"github.com/patric-chuzhbe/diploma/internal/router"
-	"github.com/patric-chuzhbe/diploma/internal/userbalancescalculator"
 	"go.uber.org/zap"
 	"net/http"
 	"os"
@@ -113,7 +113,7 @@ type App struct {
 	cfg                      *config.Config
 	db                       storage
 	httpHandler              http.Handler
-	userBalancesCalculator   *userbalancescalculator.UserBalancesCalculator
+	userBalancesCalculator   *balancescalc.UserBalancesCalculator
 	stopBalancesCalculator   context.CancelFunc
 	balancesCalculatorRunCtx context.Context
 	accrualsFetcher          *accrualsfetcher.AccrualsFetcher
@@ -140,7 +140,7 @@ func New() (*App, error) {
 		return nil, err
 	}
 
-	app.userBalancesCalculator = userbalancescalculator.New(
+	app.userBalancesCalculator = balancescalc.New(
 		app.db,
 		app.cfg.DelayBetweenQueueFetchesForBalancesCalculator,
 		app.cfg.ErrorChannelCapacity,

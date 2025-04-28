@@ -1,4 +1,4 @@
-package gzippedhttp
+package middlewares
 
 import (
 	"compress/gzip"
