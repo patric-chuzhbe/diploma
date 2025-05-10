@@ -44,3 +44,15 @@ type UserWithdrawal struct {
 	Sum         float32 `json:"sum"`
 	ProcessedAt string  `json:"processed_at"`
 }
+
+const (
+	LocalOrderStatusNew        = "NEW"
+	LocalOrderStatusProcessing = "PROCESSING"
+	LocalOrderStatusInvalid    = "INVALID"
+	LocalOrderStatusProcessed  = "PROCESSED"
+
+	RemoteOrderStatusRegistered = "REGISTERED"
+	RemoteOrderStatusInvalid    = "INVALID"
+	RemoteOrderStatusProcessing = "PROCESSING"
+	RemoteOrderStatusProcessed  = "PROCESSED"
+)

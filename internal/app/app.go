@@ -5,9 +5,8 @@ import (
 	"database/sql"
 	"encoding/base64"
 	"fmt"
-	"github.com/patric-chuzhbe/diploma/internal/accrualsfetcher"
 	"github.com/patric-chuzhbe/diploma/internal/auth"
-	"github.com/patric-chuzhbe/diploma/internal/balancescalc"
+	"github.com/patric-chuzhbe/diploma/internal/balancesactualizer"
 	"github.com/patric-chuzhbe/diploma/internal/config"
 	"github.com/patric-chuzhbe/diploma/internal/db/postgresdb"
 	"github.com/patric-chuzhbe/diploma/internal/logger"
@@ -98,6 +97,19 @@ type userOrdersKeeper interface {
 		orders map[string]models.Order,
 		outerTransaction *sql.Tx,
 	) error
+
+	GetOrdersAndUpdateStatus(
+		ctx context.Context,
+		statusFilter []string,
+		newStatus string,
+		ordersBatchSize int,
+	) (map[string]models.Order, error)
+
+	GetOrderByID(
+		ctx context.Context,
+		ID string,
+		transaction *sql.Tx,
+	) (*models.Order, error)
 }
 
 type storage interface {
@@ -113,12 +125,13 @@ type App struct {
 	cfg                      *config.Config
 	db                       storage
 	httpHandler              http.Handler
-	userBalancesCalculator   *balancescalc.UserBalancesCalculator
 	stopBalancesCalculator   context.CancelFunc
 	balancesCalculatorRunCtx context.Context
-	accrualsFetcher          *accrualsfetcher.AccrualsFetcher
 	stopAccrualsFetcher      context.CancelFunc
 	accrualsFetcherRunCtx    context.Context
+	balancesActualizer       *balancesactualizer.BalancesActualizer
+	stopBalancesActualizer   context.CancelFunc
+	balancesActualizerRunCtx context.Context
 }
 
 func New() (*App, error) {
@@ -140,34 +153,23 @@ func New() (*App, error) {
 		return nil, err
 	}
 
-	app.userBalancesCalculator = balancescalc.New(
+	app.balancesActualizer = balancesactualizer.New(
 		app.db,
-		app.cfg.DelayBetweenQueueFetchesForBalancesCalculator,
+		app.cfg.DelayBetweenOrdersQueueFetches,
 		app.cfg.ErrorChannelCapacity,
-		app.cfg.OrdersBatchSizeForBalancesCalculator,
-	)
-	balancesCalculatorRunCtx, stopBalancesCalculator := context.WithCancel(context.Background())
-	app.stopBalancesCalculator = stopBalancesCalculator
-	app.balancesCalculatorRunCtx = balancesCalculatorRunCtx
-
-	app.userBalancesCalculator.ListenErrors(func(err error) {
-		logger.Log.Debugln("Error passed from the `app.userBalancesCalculator.ListenErrors()`:", zap.Error(err))
-	})
-
-	app.accrualsFetcher = accrualsfetcher.New(
-		app.db,
-		app.cfg.DelayBetweenQueueFetchesForAccrualsFetcher,
-		app.cfg.ErrorChannelCapacity,
-		app.cfg.OrdersBatchSizeForAccrualsFetcher,
-		app.cfg.HTTPClientTimeoutForAccrualsFetcher,
+		app.cfg.OrdersBatchSize,
+		app.cfg.HTTPClientTimeoutForBalancesActualizer,
 		app.cfg.AccrualSystemAddress,
+		app.cfg.NumFetchAccrualWorkers,
+		app.cfg.NumUpdateOrdersWorkers,
+		app.cfg.NumUpdateBalancesWorkers,
 	)
-	accrualsFetcherRunCtx, stopAccrualsFetcher := context.WithCancel(context.Background())
-	app.stopAccrualsFetcher = stopAccrualsFetcher
-	app.accrualsFetcherRunCtx = accrualsFetcherRunCtx
+	balancesActualizerRunCtx, stopBalancesActualizer := context.WithCancel(context.Background())
+	app.stopBalancesActualizer = stopBalancesActualizer
+	app.balancesActualizerRunCtx = balancesActualizerRunCtx
 
-	app.accrualsFetcher.ListenErrors(func(err error) {
-		logger.Log.Debugln("Error passed from the `app.accrualsFetcher.ListenErrors()`:", zap.Error(err))
+	app.balancesActualizer.ListenErrors(func(err error) {
+		logger.Log.Debugln("Error passed from the `app.balancesActualizer.ListenErrors()`:", zap.Error(err))
 	})
 
 	authCookieSigningSecretKey, err := base64.URLEncoding.DecodeString(app.cfg.AuthCookieSigningSecretKey)
@@ -203,14 +205,12 @@ func (a *App) Run() error {
 		serverErrCh <- server.ListenAndServe()
 	}()
 
-	a.userBalancesCalculator.Run(a.balancesCalculatorRunCtx)
-	a.accrualsFetcher.Run(a.accrualsFetcherRunCtx)
+	a.balancesActualizer.Run(a.balancesActualizerRunCtx)
 
 	select {
 	case <-ctx.Done():
 		logger.Log.Infoln("Received shutdown signal. Saving database and exiting...")
-		a.stopBalancesCalculator()
-		a.stopAccrualsFetcher()
+		a.stopBalancesActualizer()
 		shutdownCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 		defer cancel()
 

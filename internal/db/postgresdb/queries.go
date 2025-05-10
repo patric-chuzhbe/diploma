@@ -125,4 +125,34 @@ const (
 		ON CONFLICT (login) DO NOTHING
 		RETURNING id;
 	`
+
+	getOrderByIDQuery = `
+		SELECT 
+			id,
+			status,
+			uploaded_at,
+			accrual
+			FROM orders 
+			WHERE id = $1;
+	`
+
+	getOrdersAndUpdateStatusQuery = `
+		WITH ordersForUpdate AS (
+			SELECT id
+				FROM orders
+				WHERE status IN (%s)
+				ORDER BY uploaded_at ASC
+				LIMIT %d
+				FOR UPDATE SKIP LOCKED
+		)
+		UPDATE orders
+			SET status = $%d
+			FROM ordersForUpdate
+			WHERE orders.id = ordersForUpdate.id
+			RETURNING
+				orders.id,
+				orders.status,
+				orders.accrual,
+				orders.uploaded_at;
+	`
 )
