@@ -25,11 +25,7 @@ func (db *PostgresDB) GetUserBalanceAndWithdrawals(
 		return nil, nil
 	}
 	if err != nil {
-		return nil,
-			fmt.Errorf(
-				"in internal/db/postgresdb/balances.go/GetUserBalanceAndWithdrawals(): error while `row.Scan()` calling: %w",
-				err,
-			)
+		return nil, fmt.Errorf(getUserBalanceAndWithdrawalsErr1, err)
 	}
 
 	withdrawalsSumValue := float32(0)
@@ -51,10 +47,7 @@ func (db *PostgresDB) Withdraw(
 ) error {
 	transaction, err := db.database.Begin()
 	if err != nil {
-		return fmt.Errorf(
-			"in internal/db/postgresdb/balances.go/Withdraw(): error while `db.database.Begin()` calling: %w",
-			err,
-		)
+		return fmt.Errorf(withdrawErr1, err)
 	}
 
 	var loyaltyBalance float32
@@ -62,24 +55,15 @@ func (db *PostgresDB) Withdraw(
 	if err != nil {
 		err2 := transaction.Rollback()
 		if err2 != nil {
-			return fmt.Errorf(
-				"in internal/db/postgresdb/balances.go/Withdraw(): error while `transaction.Rollback()` calling: %w",
-				err2,
-			)
+			return fmt.Errorf(withdrawErr2, err2)
 		}
-		return fmt.Errorf(
-			"in internal/db/postgresdb/balances.go/Withdraw(): error while `transaction.QueryRowContext()` calling: %w",
-			err,
-		)
+		return fmt.Errorf(withdrawErr3, err)
 	}
 
 	if loyaltyBalance < withdrawSum {
 		err = transaction.Rollback()
 		if err != nil {
-			return fmt.Errorf(
-				"in internal/db/postgresdb/balances.go/Withdraw(): error while `transaction.Rollback()` calling: %w",
-				err,
-			)
+			return fmt.Errorf(withdrawErr2, err)
 		}
 		return models.ErrNotEnoughBalance
 	}
@@ -95,10 +79,7 @@ func (db *PostgresDB) Withdraw(
 	if errors.Is(err, sql.ErrNoRows) {
 		err2 := transaction.Rollback()
 		if err2 != nil {
-			return fmt.Errorf(
-				"in internal/db/postgresdb/balances.go/Withdraw(): error while `transaction.Rollback()` calling: %w",
-				err2,
-			)
+			return fmt.Errorf(withdrawErr5, err2)
 		}
 		return models.ErrAlreadyWithdrawn
 	}
@@ -106,15 +87,9 @@ func (db *PostgresDB) Withdraw(
 	if err != nil {
 		err2 := transaction.Rollback()
 		if err2 != nil {
-			return fmt.Errorf(
-				"in internal/db/postgresdb/balances.go/Withdraw(): error while `transaction.Rollback()` calling: %w",
-				err2,
-			)
+			return fmt.Errorf(withdrawErr2, err2)
 		}
-		return fmt.Errorf(
-			"in internal/db/postgresdb/balances.go/Withdraw(): error while `transaction.QueryRowContext()` calling: %w",
-			err,
-		)
+		return fmt.Errorf(withdrawErr3, err)
 	}
 
 	_, err = transaction.ExecContext(
@@ -126,15 +101,9 @@ func (db *PostgresDB) Withdraw(
 	if err != nil {
 		err2 := transaction.Rollback()
 		if err2 != nil {
-			return fmt.Errorf(
-				"in internal/db/postgresdb/balances.go/Withdraw(): error while `transaction.Rollback()` calling: %w",
-				err2,
-			)
+			return fmt.Errorf(withdrawErr2, err2)
 		}
-		return fmt.Errorf(
-			"in internal/db/postgresdb/balances.go/Withdraw(): error while `transaction.ExecContext()` calling: %w",
-			err,
-		)
+		return fmt.Errorf(withdrawErr4, err)
 	}
 
 	loyaltyBalance -= withdrawSum
@@ -148,30 +117,18 @@ func (db *PostgresDB) Withdraw(
 	if err != nil {
 		err2 := transaction.Rollback()
 		if err2 != nil {
-			return fmt.Errorf(
-				"in internal/db/postgresdb/balances.go/Withdraw(): error while `transaction.Rollback()` calling: %w",
-				err2,
-			)
+			return fmt.Errorf(withdrawErr2, err2)
 		}
-		return fmt.Errorf(
-			"in internal/db/postgresdb/balances.go/Withdraw(): error while `transaction.ExecContext()` calling: %w",
-			err,
-		)
+		return fmt.Errorf(withdrawErr4, err)
 	}
 
 	err = transaction.Commit()
 	if err != nil {
 		err2 := transaction.Rollback()
 		if err2 != nil {
-			return fmt.Errorf(
-				"in internal/db/postgresdb/balances.go/Withdraw(): error while `transaction.Rollback()` calling: %w",
-				err2,
-			)
+			return fmt.Errorf(withdrawErr2, err2)
 		}
-		return fmt.Errorf(
-			"in internal/db/postgresdb/balances.go/Withdraw(): error while `transaction.Commit()` calling: %w",
-			err,
-		)
+		return fmt.Errorf(withdrawErr5, err)
 	}
 
 	return nil
@@ -183,11 +140,7 @@ func (db *PostgresDB) GetUserWithdrawals(
 ) ([]models.UserWithdrawal, error) {
 	rows, err := db.database.QueryContext(ctx, getUserWithdrawalsQuery, userID)
 	if err != nil {
-		return nil,
-			fmt.Errorf(
-				"in internal/db/postgresdb/balances.go/GetUserWithdrawals(): error while `db.database.QueryContext()` calling: %w",
-				err,
-			)
+		return nil, fmt.Errorf(getUserWithdrawalsErr1, err)
 	}
 	defer rows.Close()
 
@@ -202,11 +155,7 @@ func (db *PostgresDB) GetUserWithdrawals(
 			&processedAt,
 		)
 		if err != nil {
-			return nil,
-				fmt.Errorf(
-					"in internal/db/postgresdb/balances.go/GetUserWithdrawals(): error while `rows.Scan()` calling: %w",
-					err,
-				)
+			return nil, fmt.Errorf(getUserWithdrawalsErr2, err)
 		}
 
 		result = append(
@@ -221,11 +170,7 @@ func (db *PostgresDB) GetUserWithdrawals(
 
 	err = rows.Err()
 	if err != nil {
-		return nil,
-			fmt.Errorf(
-				"in internal/db/postgresdb/balances.go/GetUserWithdrawals(): error while `rows.Err()` calling: %w",
-				err,
-			)
+		return nil, fmt.Errorf(getUserWithdrawalsErr3, err)
 	}
 
 	return result, nil

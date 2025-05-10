@@ -32,11 +32,7 @@ func (db *PostgresDB) BeginTransaction() (*sql.Tx, error) {
 func New(databaseDSN string, migrationsDir string) (*PostgresDB, error) {
 	database, err := sql.Open("pgx", databaseDSN)
 	if err != nil {
-		return nil,
-			fmt.Errorf(
-				"in internal/db/postgresdb/postgresdb.go/New(): error while `sql.Open()` calling: %w",
-				err,
-			)
+		return nil, fmt.Errorf(newErr1, err)
 	}
 
 	result := &PostgresDB{
@@ -44,19 +40,11 @@ func New(databaseDSN string, migrationsDir string) (*PostgresDB, error) {
 	}
 
 	if err := goose.SetDialect("postgres"); err != nil {
-		return nil,
-			fmt.Errorf(
-				"in internal/db/postgresdb/postgresdb.go/New(): error while `goose.SetDialect()` calling: %w",
-				err,
-			)
+		return nil, fmt.Errorf(newErr2, err)
 	}
 
 	if err := goose.Up(result.database, migrationsDir); err != nil {
-		return nil,
-			fmt.Errorf(
-				"in internal/db/postgresdb/postgresdb.go/New(): error while `goose.Up()` calling: %w",
-				err,
-			)
+		return nil, fmt.Errorf(newErr3, err)
 	}
 
 	return result, nil
@@ -65,10 +53,7 @@ func New(databaseDSN string, migrationsDir string) (*PostgresDB, error) {
 func (db *PostgresDB) Close() error {
 	err := db.database.Close()
 	if err != nil {
-		return fmt.Errorf(
-			"in internal/db/postgresdb/postgresdb.go/Close(): error while `db.database.Close()` calling: %w",
-			err,
-		)
+		return fmt.Errorf(closeErr1, err)
 	}
 
 	return nil

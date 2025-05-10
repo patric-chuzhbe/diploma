@@ -23,7 +23,13 @@ type Config struct {
 	OrdersBatchSizeForBalancesCalculator          int           `env:"ORDERS_BATCH_SIZE_FOR_BALANCES_CALCULATOR" envDefault:"500"`
 	OrdersBatchSizeForAccrualsFetcher             int           `env:"ORDERS_BATCH_SIZE_FOR_ACCRUALS_FETCHER" envDefault:"500"`
 	HTTPClientTimeoutForAccrualsFetcher           time.Duration `env:"HTTP_CLIENT_TIMEOUT_FOR_ACCRUALS_FETCHER" envDefault:"10s"`
-	AccrualSystemAddress                          string        `env:"ACCRUAL_SYSTEM_ADDRESS" envDefault:":8080" validate:"url"`
+	AccrualSystemAddress                          string        `env:"ACCRUAL_SYSTEM_ADDRESS" envDefault:"http://localhost:8080" validate:"url"`
+	DelayBetweenOrdersQueueFetches                time.Duration `env:"DELAY_BETWEEN_ORDERS_QUEUE_FETCHES" envDefault:"5s"`
+	OrdersBatchSize                               int           `env:"ORDERS_BATCH_SIZE" envDefault:"500"`
+	HTTPClientTimeoutForBalancesActualizer        time.Duration `env:"HTTP_CLIENT_TIMEOUT_FOR_BALANCES_ACTUALIZER" envDefault:"10s"`
+	NumFetchAccrualWorkers                        int           `env:"NUM_FETCH_ACCRUAL_WORKERS" envDefault:"10"`
+	NumUpdateOrdersWorkers                        int           `env:"NUM_UPDATE_ORDERS_WORKERS" envDefault:"10"`
+	NumUpdateBalancesWorkers                      int           `env:"NUM_UPDATE_BALANCES_WORKERS" envDefault:"10"`
 }
 
 func validateFilePath(fieldLevel validator.FieldLevel) bool {

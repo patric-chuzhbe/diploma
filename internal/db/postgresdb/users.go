@@ -19,10 +19,7 @@ func (db *PostgresDB) UpdateUsers(
 	if outerTransaction == nil {
 		innerTransaction, err = db.BeginTransaction()
 		if err != nil {
-			return fmt.Errorf(
-				"in internal/db/postgresdb/users.go/UpdateUsers(): error while `db.BeginTransaction()` calling: %w",
-				err,
-			)
+			return fmt.Errorf(updateUsersErr1, err)
 		}
 	}
 
@@ -39,26 +36,17 @@ func (db *PostgresDB) UpdateUsers(
 			if outerTransaction == nil {
 				err2 := db.RollbackTransaction(innerTransaction)
 				if err2 != nil {
-					return fmt.Errorf(
-						"in internal/db/postgresdb/users.go/UpdateUsers(): error while `db.RollbackTransaction()` calling: %w",
-						err2,
-					)
+					return fmt.Errorf(updateUsersErr2, err2)
 				}
 			}
-			return fmt.Errorf(
-				"in internal/db/postgresdb/users.go/UpdateUsers(): error while `innerTransaction.ExecContext()` calling: %w",
-				err,
-			)
+			return fmt.Errorf(updateUsersErr3, err)
 		}
 	}
 
 	if outerTransaction == nil {
 		err := db.CommitTransaction(innerTransaction)
 		if err != nil {
-			return fmt.Errorf(
-				"in internal/db/postgresdb/users.go/UpdateUsers(): error while `db.CommitTransaction()` calling: %w",
-				err,
-			)
+			return fmt.Errorf(updateUsersErr4, err)
 		}
 	}
 
@@ -89,11 +77,7 @@ func (db *PostgresDB) GetUsersByOrders(
 		toInterfaceSlice(orderNumbers)...,
 	)
 	if err != nil {
-		return []models.User{}, map[string][]string{},
-			fmt.Errorf(
-				"in internal/db/postgresdb/users.go/GetUsersByOrders(): error while `transaction.QueryContext()` calling: %w",
-				err,
-			)
+		return []models.User{}, map[string][]string{}, fmt.Errorf(getUsersByOrdersErr1, err)
 	}
 	defer rows.Close()
 
@@ -113,11 +97,7 @@ func (db *PostgresDB) GetUsersByOrders(
 			&orderIDs,
 		)
 		if err != nil {
-			return []models.User{}, map[string][]string{},
-				fmt.Errorf(
-					"in internal/db/postgresdb/users.go/GetUsersByOrders(): error while `rows.Scan()` calling: %w",
-					err,
-				)
+			return []models.User{}, map[string][]string{}, fmt.Errorf(getUsersByOrdersErr2, err)
 		}
 
 		users = append(users, models.User{
@@ -132,11 +112,7 @@ func (db *PostgresDB) GetUsersByOrders(
 
 	err = rows.Err()
 	if err != nil {
-		return []models.User{}, map[string][]string{},
-			fmt.Errorf(
-				"in internal/db/postgresdb/users.go/GetUsersByOrders(): error while `rows.Err()` calling: %w",
-				err,
-			)
+		return []models.User{}, map[string][]string{}, fmt.Errorf(getUsersByOrdersErr3, err)
 	}
 
 	return users, usersToOrdersMapping, nil
@@ -157,11 +133,7 @@ func (db *PostgresDB) GetUserByID(
 		return &models.User{}, nil
 	}
 	if err != nil {
-		return &models.User{},
-			fmt.Errorf(
-				"in internal/db/postgresdb/users.go/GetUserByID(): error while `row.Scan()` calling: %w",
-				err,
-			)
+		return &models.User{}, fmt.Errorf(getUserByIDErr1, err)
 	}
 
 	return &models.User{ID: userIDFromDB}, nil
@@ -179,11 +151,7 @@ func (db *PostgresDB) CreateUser(
 	}
 
 	if err != nil {
-		return "",
-			fmt.Errorf(
-				"in internal/db/postgresdb/users.go/CreateUser(): error while `db.database.QueryRowContext()` calling: %w",
-				err,
-			)
+		return "", fmt.Errorf(createUserErr1, err)
 	}
 
 	return userID, nil
@@ -201,11 +169,7 @@ func (db *PostgresDB) GetUserIDByLoginAndPassword(
 	}
 
 	if err != nil {
-		return "",
-			fmt.Errorf(
-				"in internal/db/postgresdb/users.go/GetUserIDByLoginAndPassword(): error while `db.database.QueryRowContext()` calling: %w",
-				err,
-			)
+		return "", fmt.Errorf(getUserIDByLoginAndPasswordErr1, err)
 	}
 
 	return userID, nil
