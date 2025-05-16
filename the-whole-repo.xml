@@ -1,0 +1,4048 @@
+This file is a merged representation of the entire codebase, combined into a single document.
+
+<file_summary>
+This section contains a summary of this file.
+
+<purpose>
+This file contains a packed representation of the entire repository's contents.
+It is designed to be easily consumable by AI systems for analysis, code review,
+or other automated processes.
+</purpose>
+
+<file_format>
+The content is organized as follows:
+1. This summary section
+2. Repository information
+3. Directory structure
+4. Repository files (if enabled)
+4. Repository files, each consisting of:
+  - File path as an attribute
+  - Full contents of the file
+</file_format>
+
+<usage_guidelines>
+- This file should be treated as read-only. Any changes should be made to the
+  original repository files, not this packed version.
+- When processing this file, use the file path to distinguish
+  between different files in the repository.
+- Be aware that this file may contain sensitive information. Handle it with
+  the same level of security as you would the original repository.
+</usage_guidelines>
+
+<notes>
+- Some files may have been excluded based on .gitignore rules and Repomix's configuration
+- Binary files are not included in this packed representation. Please refer to the Repository Structure section for a complete list of file paths, including binary files
+- Files matching patterns in .gitignore are excluded
+- Files matching default ignore patterns are excluded
+- Files are sorted by Git change count (files with more changes are at the bottom)
+</notes>
+
+<additional_info>
+
+</additional_info>
+
+</file_summary>
+
+<directory_structure>
+.github/workflows/gophermart.yml
+.github/workflows/statictest.yml
+.gitignore
+cmd/gophermart/.env
+cmd/gophermart/main.go
+cmd/gophermart/migrations/20250330095048_initial_db_structure.sql
+cmd/gophermart/README.md
+go.mod
+internal/app/app.go
+internal/auth/auth.go
+internal/balancesactualizer/accrualsfetcher/accrualsfetcher.go
+internal/balancesactualizer/accrualsfetcher/errors.go
+internal/balancesactualizer/balancesactualizer.go
+internal/balancesactualizer/balancesupdater/balancesupdater.go
+internal/balancesactualizer/balancesupdater/errors.go
+internal/balancesactualizer/errors.go
+internal/balancesactualizer/models/models.go
+internal/balancesactualizer/ordersupdater/errors.go
+internal/balancesactualizer/ordersupdater/ordersupdater.go
+internal/config/config.go
+internal/db/postgresdb/balances.go
+internal/db/postgresdb/errors.go
+internal/db/postgresdb/helpers.go
+internal/db/postgresdb/orders.go
+internal/db/postgresdb/postgresdb.go
+internal/db/postgresdb/queries.go
+internal/db/postgresdb/users.go
+internal/logger/logger.go
+internal/middlewares/gzipping.go
+internal/models/models.go
+internal/router/handlers/auth.go
+internal/router/handlers/balance.go
+internal/router/handlers/handlers.go
+internal/router/handlers/index.go
+internal/router/handlers/orders.go
+internal/router/router.go
+migrations/20250330095048_initial_db_structure.sql
+README.md
+SPECIFICATION.md
+</directory_structure>
+
+<files>
+This section contains the contents of the repository's files.
+
+<file path=".github/workflows/gophermart.yml">
+name: gophermart
+
+on:
+  workflow_dispatch:
+  pull_request:
+  push:
+    branches:
+      - main
+      - master
+
+jobs:
+
+  build:
+    runs-on: ubuntu-latest
+    container: golang:1.23
+
+    services:
+      postgres:
+        image: postgres
+        env:
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: praktikum
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 5
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v2
+
+      - name: Download autotests binaries
+        uses: robinraju/release-downloader@v1.8
+        with:
+          repository: Yandex-Practicum/go-autotests
+          latest: true
+          fileName: "*"
+          out-file-path: .tools
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Setup autotest binary
+        run: |
+          chmod -R +x $GITHUB_WORKSPACE/.tools
+          mv $GITHUB_WORKSPACE/.tools/gophermarttest /usr/local/bin/gophermarttest
+          mv $GITHUB_WORKSPACE/.tools/random /usr/local/bin/random
+
+      - name: Prepare binaries
+        run: |
+          (cd cmd/gophermart && go build -buildvcs=false -o gophermart)
+          (cd cmd/accrual && chmod +x accrual_linux_amd64)
+
+      - name: Test
+        run: |
+          gophermarttest \
+            -test.v -test.run=^TestGophermart$ \
+            -gophermart-binary-path=cmd/gophermart/gophermart \
+            -gophermart-host=localhost \
+            -gophermart-port=8080 \
+            -gophermart-database-uri="postgresql://postgres:postgres@postgres/praktikum?sslmode=disable" \
+            -accrual-binary-path=cmd/accrual/accrual_linux_amd64 \
+            -accrual-host=localhost \
+            -accrual-port=$(random unused-port) \
+            -accrual-database-uri="postgresql://postgres:postgres@postgres/praktikum?sslmode=disable"
+</file>
+
+<file path=".github/workflows/statictest.yml">
+name: go vet test
+
+on:
+  pull_request:
+  push:
+    branches:
+      - master
+      - main
+
+jobs:
+  statictest:
+    runs-on: ubuntu-latest
+    container: golang:1.23
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v2
+
+      - name: Download statictest binary
+        uses: robinraju/release-downloader@v1.8
+        with:
+          repository: Yandex-Practicum/go-autotests
+          latest: true
+          fileName: statictest
+          out-file-path: .tools
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Setup autotest binary
+        run: |
+          chmod -R +x $GITHUB_WORKSPACE/.tools/statictest
+          mv $GITHUB_WORKSPACE/.tools/statictest /usr/local/bin/statictest
+
+      - name: Run statictest
+        run: |
+          go vet -vettool=$(which statictest) ./...
+</file>
+
+<file path=".gitignore">
+# Binaries for programs and plugins
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+
+# Test binary, built with `go test -c`
+*.test
+
+# Output of the go coverage tool, specifically when used with LiteIDE
+*.out
+
+# Binaries
+cmd/gophermart/main
+cmd/gophermart/gophermart
+
+# Dependency directories (remove the comment below to include it)
+vendor/
+
+# IDEs directories
+.idea
+.vscode
+</file>
+
+<file path="cmd/gophermart/README.md">
+# cmd/gophermart
+
+В данной директории будет содержаться код накопительной системы лояльности, который скомпилируется в бинарное
+приложение.
+</file>
+
+<file path="internal/db/postgresdb/helpers.go">
+package postgresdb
+
+func toInterfaceSlice(strSlice []string) []interface{} {
+	result := make([]interface{}, len(strSlice))
+	for i, v := range strSlice {
+		result[i] = v
+	}
+	return result
+}
+</file>
+
+<file path="internal/logger/logger.go">
+package logger
+
+import (
+	"errors"
+	"go.uber.org/zap"
+	"net/http"
+	"os"
+	"time"
+)
+
+type responseData struct {
+	status int
+	size   int
+}
+
+type loggingResponseWriter struct {
+	http.ResponseWriter
+	responseData *responseData
+}
+
+func (r *loggingResponseWriter) Write(b []byte) (int, error) {
+	size, err := r.ResponseWriter.Write(b)
+	r.responseData.size += size
+	return size, err
+}
+
+func (r *loggingResponseWriter) WriteHeader(statusCode int) {
+	r.ResponseWriter.WriteHeader(statusCode)
+	r.responseData.status = statusCode
+}
+
+var Log *zap.SugaredLogger
+
+func Init(level string) error {
+	lvl, err := zap.ParseAtomicLevel(level)
+	if err != nil {
+		return err
+	}
+
+	cfg := zap.NewDevelopmentConfig()
+	cfg.Level = lvl
+	zl, err := cfg.Build()
+	if err != nil {
+		return err
+	}
+	Log = zl.Sugar()
+
+	return nil
+}
+
+func Sync() error {
+	if err := Log.Sync(); err != nil && !errors.Is(err, os.ErrInvalid) {
+		return err
+	}
+
+	return nil
+}
+
+func WithLoggingHTTPMiddleware(h http.Handler) http.Handler {
+	logFn := func(w http.ResponseWriter, r *http.Request) {
+		start := time.Now()
+
+		responseData := &responseData{
+			status: 0,
+			size:   0,
+		}
+		lw := loggingResponseWriter{
+			ResponseWriter: w,
+			responseData:   responseData,
+		}
+		h.ServeHTTP(&lw, r)
+
+		duration := time.Since(start)
+
+		Log.Infoln(
+			"uri", r.RequestURI,
+			"method", r.Method,
+			"status", responseData.status,
+			"duration", duration,
+			"size", responseData.size,
+		)
+	}
+
+	return http.HandlerFunc(logFn)
+}
+</file>
+
+<file path="internal/middlewares/gzipping.go">
+package middlewares
+
+import (
+	"compress/gzip"
+	"io"
+	"net/http"
+	"strings"
+)
+
+type CompressedReader struct {
+	r  io.ReadCloser
+	zr *gzip.Reader
+}
+
+func (c CompressedReader) Read(p []byte) (n int, err error) {
+	return c.zr.Read(p)
+}
+
+func (c *CompressedReader) Close() error {
+	if err := c.r.Close(); err != nil {
+		return err
+	}
+	return c.zr.Close()
+}
+
+func NewCompressedReader(requestBody io.ReadCloser) (*CompressedReader, error) {
+	zippedRequestBody, err := gzip.NewReader(requestBody)
+	if err != nil {
+		return nil, err
+	}
+
+	return &CompressedReader{
+		r:  requestBody,
+		zr: zippedRequestBody,
+	}, nil
+}
+
+type CompressedHTTPResponseWriter struct {
+	w  http.ResponseWriter
+	zw *gzip.Writer
+}
+
+func (c *CompressedHTTPResponseWriter) Close() error {
+	return c.zw.Close()
+}
+
+func (c *CompressedHTTPResponseWriter) WriteHeader(statusCode int) {
+	if statusCode < 300 {
+		c.w.Header().Set("Content-Encoding", "gzip")
+	}
+	c.w.WriteHeader(statusCode)
+}
+
+func (c *CompressedHTTPResponseWriter) Write(p []byte) (int, error) {
+	return c.zw.Write(p)
+}
+
+func (c *CompressedHTTPResponseWriter) Header() http.Header {
+	return c.w.Header()
+}
+
+func NewCompressedHTTPResponseWriter(w http.ResponseWriter) *CompressedHTTPResponseWriter {
+	return &CompressedHTTPResponseWriter{
+		w:  w,
+		zw: gzip.NewWriter(w),
+	}
+}
+
+func GzipResponse(h http.Handler) http.Handler {
+	middleware := func(response http.ResponseWriter, request *http.Request) {
+		finalResponse := response
+
+		acceptEncoding := request.Header.Get("Accept-Encoding")
+		clientAcceptsGzip := strings.Contains(acceptEncoding, "gzip")
+		if clientAcceptsGzip {
+			response.Header().Set("Content-Encoding", "gzip")
+			responseWithCompression := NewCompressedHTTPResponseWriter(response)
+			finalResponse = responseWithCompression
+			defer responseWithCompression.Close()
+		}
+
+		h.ServeHTTP(finalResponse, request)
+	}
+
+	return http.HandlerFunc(middleware)
+}
+
+func UngzipJSONAndTextHTMLRequest(h http.Handler) http.Handler {
+	middleware := func(response http.ResponseWriter, request *http.Request) {
+		contentEncoding := request.Header.Get("Content-Encoding")
+		clientSendsGzippedData := strings.Contains(contentEncoding, "gzip")
+		if clientSendsGzippedData {
+			requestBodyWithCompression, err := NewCompressedReader(request.Body)
+			if err != nil {
+				response.WriteHeader(http.StatusInternalServerError)
+				return
+			}
+			request.Body = requestBodyWithCompression
+			defer requestBodyWithCompression.Close()
+		}
+
+		h.ServeHTTP(response, request)
+	}
+
+	return http.HandlerFunc(middleware)
+}
+</file>
+
+<file path="internal/router/handlers/auth.go">
+package handlers
+
+import (
+	"context"
+	"encoding/json"
+	"errors"
+	"github.com/go-playground/validator/v10"
+	"github.com/patric-chuzhbe/diploma/internal/logger"
+	"github.com/patric-chuzhbe/diploma/internal/models"
+	"go.uber.org/zap"
+	"net/http"
+	"regexp"
+)
+
+type UsersKeeper interface {
+	CreateUser(
+		ctx context.Context,
+		usr *models.User,
+	) (string, error)
+
+	GetUserIDByLoginAndPassword(
+		ctx context.Context,
+		usr *models.User,
+	) (string, error)
+}
+
+type AuthHandler struct {
+	db   UsersKeeper
+	auth authenticator
+}
+
+func (h *AuthHandler) PostApiuserlogin(response http.ResponseWriter, request *http.Request) {
+	if request.Method != http.MethodPost {
+		logger.Log.Debug("got request with bad method", zap.String("method", request.Method))
+		response.WriteHeader(http.StatusMethodNotAllowed)
+		return
+	}
+
+	var requestDTO models.UserRegisterRequest
+	if err := json.NewDecoder(request.Body).Decode(&requestDTO); err != nil {
+		logger.Log.Debugln("cannot decode request JSON body", zap.Error(err))
+		response.WriteHeader(http.StatusInternalServerError)
+		return
+	}
+
+	validate := validator.New()
+	err := validate.RegisterValidation("password", validatePassword)
+	if err != nil {
+		logger.Log.Debugln("error while `validate.RegisterValidation()` calling: ", zap.Error(err))
+		response.WriteHeader(http.StatusInternalServerError)
+		return
+	}
+	if err := validate.Struct(requestDTO); err != nil {
+		logger.Log.Debugln("incorrect request structure", zap.Error(err))
+		response.WriteHeader(http.StatusBadRequest)
+		return
+	}
+
+	userID, err := h.db.GetUserIDByLoginAndPassword(
+		request.Context(),
+		&models.User{
+			Login: requestDTO.Login,
+			Pass:  requestDTO.Pass,
+		},
+	)
+	if err != nil {
+		logger.Log.Debugln("error while `h.db.GetUserIDByLoginAndPassword()` calling: ", zap.Error(err))
+		response.WriteHeader(http.StatusInternalServerError)
+		return
+	}
+	if userID == "" {
+		response.WriteHeader(http.StatusUnauthorized)
+		return
+	}
+
+	err = h.auth.SetAuthData(userID, response)
+	if err != nil {
+		logger.Log.Debugln("error while setting auth data", zap.Error(err))
+		response.WriteHeader(http.StatusInternalServerError)
+		return
+	}
+
+	response.WriteHeader(http.StatusOK)
+}
+
+var pwdPattern = regexp.MustCompile(`^[a-zA-Z0-9~!@#$%^*]+$`)
+
+func validatePassword(fl validator.FieldLevel) bool {
+	return pwdPattern.MatchString(fl.Field().String())
+}
+
+func (h *AuthHandler) PostApiuserregister(response http.ResponseWriter, request *http.Request) {
+	if request.Method != http.MethodPost {
+		logger.Log.Debug("got request with bad method", zap.String("method", request.Method))
+		response.WriteHeader(http.StatusMethodNotAllowed)
+		return
+	}
+
+	var requestDTO models.UserRegisterRequest
+	if err := json.NewDecoder(request.Body).Decode(&requestDTO); err != nil {
+		logger.Log.Debugln("cannot decode request JSON body", zap.Error(err))
+		response.WriteHeader(http.StatusInternalServerError)
+		return
+	}
+
+	validate := validator.New()
+	err := validate.RegisterValidation("password", validatePassword)
+	if err != nil {
+		logger.Log.Debugln("error while `validate.RegisterValidation()` calling: ", zap.Error(err))
+		response.WriteHeader(http.StatusInternalServerError)
+		return
+	}
+	if err := validate.Struct(requestDTO); err != nil {
+		logger.Log.Debugln("incorrect request structure", zap.Error(err))
+		response.WriteHeader(http.StatusBadRequest)
+		return
+	}
+
+	userID, err := h.db.CreateUser(
+		request.Context(),
+		&models.User{
+			Login: requestDTO.Login,
+			Pass:  requestDTO.Pass,
+		},
+	)
+	if errors.Is(err, models.ErrUserAlreadyExists) {
+		logger.Log.Debugf("registering user `%s` already exists", requestDTO.Login)
+		response.WriteHeader(http.StatusConflict)
+		return
+	}
+	if err != nil {
+		logger.Log.Debugln("error while `h.db.CreateUser()` calling: ", zap.Error(err))
+		response.WriteHeader(http.StatusInternalServerError)
+		return
+	}
+
+	err = h.auth.SetAuthData(userID, response)
+	if err != nil {
+		logger.Log.Debugln("error while setting auth data", zap.Error(err))
+		response.WriteHeader(http.StatusInternalServerError)
+		return
+	}
+
+	response.WriteHeader(http.StatusOK)
+}
+
+func NewAuthHandler(db UsersKeeper, auth authenticator) *AuthHandler {
+	return &AuthHandler{db: db, auth: auth}
+}
+</file>
+
+<file path="internal/router/handlers/balance.go">
+package handlers
+
+import (
+	"context"
+	"encoding/json"
+	"errors"
+	"github.com/go-playground/validator/v10"
+	"github.com/joeljunstrom/go-luhn"
+	"github.com/patric-chuzhbe/diploma/internal/auth"
+	"github.com/patric-chuzhbe/diploma/internal/logger"
+	"github.com/patric-chuzhbe/diploma/internal/models"
+	"go.uber.org/zap"
+	"net/http"
+)
+
+type BalancesKeeper interface {
+	GetUserBalanceAndWithdrawals(
+		ctx context.Context,
+		userID string,
+	) (*models.UserBalanceAndWithdrawals, error)
+
+	Withdraw(
+		ctx context.Context,
+		userID string,
+		orderNumber string,
+		withdrawSum float32,
+	) error
+
+	GetUserWithdrawals(
+		ctx context.Context,
+		userID string,
+	) ([]models.UserWithdrawal, error)
+}
+
+type BalanceHandler struct {
+	db   BalancesKeeper
+	auth authenticator
+}
+
+func (h *BalanceHandler) GetApiuserwithdrawals(response http.ResponseWriter, request *http.Request) {
+	userID, ok := request.Context().Value(auth.UserIDKey).(string)
+	if !ok || userID == "" {
+		response.WriteHeader(http.StatusUnauthorized)
+		return
+	}
+
+	responseDTO, err := h.db.GetUserWithdrawals(request.Context(), userID)
+	if err != nil {
+		logger.Log.Debugln("Error calling the `h.db.GetUserWithdrawals()`: ", zap.Error(err))
+		response.WriteHeader(http.StatusInternalServerError)
+		return
+	}
+
+	if len(responseDTO) == 0 {
+		response.WriteHeader(http.StatusNoContent)
+		return
+	}
+
+	response.Header().Set("Content-Type", "application/json")
+
+	err = json.NewEncoder(response).Encode(responseDTO)
+	if err != nil {
+		logger.Log.Debug("error encoding response", zap.Error(err))
+		return
+	}
+}
+
+func (h *BalanceHandler) validateOrderNumber(orderNumber []byte) error {
+	if !orderNumberPattern.Match(orderNumber) {
+		return errors.New("order number contains invalid characters")
+	}
+
+	if !luhn.Valid(string(orderNumber)) {
+		return errors.New("order number is invalid")
+	}
+
+	return nil
+}
+
+func (h *BalanceHandler) PostApiuserbalancewithdraw(response http.ResponseWriter, request *http.Request) {
+	userID, ok := request.Context().Value(auth.UserIDKey).(string)
+	if !ok || userID == "" {
+		response.WriteHeader(http.StatusUnauthorized)
+		return
+	}
+
+	var requestDTO models.BalanceWithdrawRequest
+	if err := json.NewDecoder(request.Body).Decode(&requestDTO); err != nil {
+		logger.Log.Debugln("cannot decode request JSON body", zap.Error(err))
+		response.WriteHeader(http.StatusInternalServerError)
+		return
+	}
+
+	validate := validator.New()
+	if err := validate.Struct(requestDTO); err != nil {
+		logger.Log.Debugln("incorrect request structure", zap.Error(err))
+		response.WriteHeader(http.StatusBadRequest)
+		return
+	}
+
+	if h.validateOrderNumber([]byte(requestDTO.OrderNumber)) != nil {
+		response.WriteHeader(http.StatusUnprocessableEntity)
+		return
+	}
+
+	err := h.db.Withdraw(request.Context(), userID, requestDTO.OrderNumber, requestDTO.WithdrawSum)
+
+	if errors.Is(err, models.ErrNotEnoughBalance) {
+		response.WriteHeader(http.StatusPaymentRequired)
+		return
+	}
+
+	if errors.Is(err, models.ErrAlreadyWithdrawn) {
+		response.WriteHeader(http.StatusUnprocessableEntity)
+		return
+	}
+
+	if err != nil {
+		logger.Log.Debugln("Error calling the `h.db.Withdraw()`: ", zap.Error(err))
+		response.WriteHeader(http.StatusInternalServerError)
+		return
+	}
+
+	response.WriteHeader(http.StatusOK)
+}
+
+func (h *BalanceHandler) GetApiuserbalance(response http.ResponseWriter, request *http.Request) {
+	userID, ok := request.Context().Value(auth.UserIDKey).(string)
+	if !ok || userID == "" {
+		response.WriteHeader(http.StatusUnauthorized)
+		return
+	}
+
+	responseDTO, err := h.db.GetUserBalanceAndWithdrawals(request.Context(), userID)
+	if err != nil {
+		logger.Log.Debugln("Error calling the `h.db.GetUserBalanceAndWithdrawals()`: ", zap.Error(err))
+		response.WriteHeader(http.StatusInternalServerError)
+		return
+	}
+
+	response.Header().Set("Content-Type", "application/json")
+
+	err = json.NewEncoder(response).Encode(responseDTO)
+	if err != nil {
+		logger.Log.Debug("error encoding response", zap.Error(err))
+		return
+	}
+}
+
+func NewBalanceHandler(db BalancesKeeper, auth authenticator) *BalanceHandler {
+	return &BalanceHandler{db: db, auth: auth}
+}
+</file>
+
+<file path="internal/router/handlers/handlers.go">
+package handlers
+
+import "net/http"
+
+type authenticator interface {
+	SetAuthData(userID string, response http.ResponseWriter) error
+	AuthenticateUser(h http.Handler) http.Handler
+}
+</file>
+
+<file path="internal/router/handlers/index.go">
+package handlers
+
+import "net/http"
+
+type IndexHandler struct{}
+
+func (h *IndexHandler) GetIndex(response http.ResponseWriter, request *http.Request) {
+	response.WriteHeader(http.StatusOK)
+
+	_, err := response.Write([]byte(`Hello from the Gophermart!`))
+	if err != nil {
+		http.Error(response, err.Error(), http.StatusBadRequest)
+		return
+	}
+}
+
+func NewIndexHandler() *IndexHandler {
+	return &IndexHandler{}
+}
+</file>
+
+<file path="internal/router/handlers/orders.go">
+package handlers
+
+import (
+	"context"
+	"encoding/json"
+	"errors"
+	"fmt"
+	"github.com/joeljunstrom/go-luhn"
+	"github.com/patric-chuzhbe/diploma/internal/auth"
+	"github.com/patric-chuzhbe/diploma/internal/logger"
+	"github.com/patric-chuzhbe/diploma/internal/models"
+	"go.uber.org/zap"
+	"io"
+	"net/http"
+	"regexp"
+)
+
+type OrdersKeeper interface {
+	SaveNewOrderForUser(
+		ctx context.Context,
+		userID string,
+		orderNumber string,
+	) (string, error)
+
+	GetUserOrders(
+		ctx context.Context,
+		userID string,
+	) ([]models.Order, error)
+}
+
+type OrdersHandler struct {
+	db   OrdersKeeper
+	auth authenticator
+}
+
+var orderNumberPattern = regexp.MustCompile(`^\d+$`)
+
+func (h *OrdersHandler) GetApiuserorders(response http.ResponseWriter, request *http.Request) {
+	userID, ok := request.Context().Value(auth.UserIDKey).(string)
+	if !ok || userID == "" {
+		response.WriteHeader(http.StatusUnauthorized)
+		return
+	}
+
+	responseDTO, err := h.db.GetUserOrders(request.Context(), userID)
+	if err != nil {
+		logger.Log.Debugln("Error calling the `h.db.GetUserOrders()`: ", zap.Error(err))
+		response.WriteHeader(http.StatusInternalServerError)
+		return
+	}
+
+	if len(responseDTO) == 0 {
+		response.WriteHeader(http.StatusNoContent)
+		return
+	}
+
+	response.Header().Set("Content-Type", "application/json")
+
+	err = json.NewEncoder(response).Encode(responseDTO)
+	if err != nil {
+		logger.Log.Debug("error encoding response", zap.Error(err))
+		return
+	}
+}
+
+func (h *OrdersHandler) validateOrderNumber(orderNumber []byte) error {
+	if !orderNumberPattern.Match(orderNumber) {
+		return errors.New("order number contains invalid characters")
+	}
+
+	if !luhn.Valid(string(orderNumber)) {
+		return errors.New("order number is invalid")
+	}
+
+	return nil
+}
+
+func (h *OrdersHandler) PostApiuserorders(response http.ResponseWriter, request *http.Request) {
+	if request.Header.Get("Content-Type") != "text/plain" {
+		response.WriteHeader(http.StatusBadRequest)
+		return
+	}
+
+	userID, ok := request.Context().Value(auth.UserIDKey).(string)
+	if !ok || userID == "" {
+		response.WriteHeader(http.StatusUnauthorized)
+		return
+	}
+
+	orderNumber, err := io.ReadAll(request.Body)
+	if err != nil {
+		logger.Log.Debugln("error while `io.ReadAll()` calling: ", zap.Error(err))
+		response.WriteHeader(http.StatusInternalServerError)
+		return
+	}
+
+	err = h.validateOrderNumber(orderNumber)
+	if err != nil {
+		http.Error(
+			response,
+			fmt.Sprintf(
+				"invalid order number: %v",
+				err,
+			),
+			http.StatusUnprocessableEntity,
+		)
+		return
+	}
+
+	actualUserID, err := h.db.SaveNewOrderForUser(request.Context(), userID, string(orderNumber))
+	if errors.Is(err, models.ErrOrderAlreadyExists) {
+		if actualUserID == userID {
+			response.WriteHeader(http.StatusOK)
+			return
+		}
+		response.WriteHeader(http.StatusConflict)
+		return
+	}
+	if err != nil {
+		logger.Log.Debugln("error while `h.db.SaveNewOrderForUser()` calling: ", zap.Error(err))
+		response.WriteHeader(http.StatusInternalServerError)
+		return
+	}
+
+	response.WriteHeader(http.StatusAccepted)
+}
+
+func NewOrdersHandler(db OrdersKeeper, auth authenticator) *OrdersHandler {
+	return &OrdersHandler{db: db, auth: auth}
+}
+</file>
+
+<file path="migrations/20250330095048_initial_db_structure.sql">
+-- +goose Up
+-- +goose StatementBegin
+CREATE TABLE orders
+(
+    id          VARCHAR(255) NOT NULL,
+    status      VARCHAR(255) NOT NULL
+        CONSTRAINT CKC_STATUS_ORDERS CHECK (status IN ('NEW', 'PROCESSING', 'INVALID', 'PROCESSED')),
+    uploaded_at TIMESTAMP    NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    accrual     REAL NULL,
+    CONSTRAINT PK_ORDERS PRIMARY KEY (id)
+);
+
+CREATE TABLE users
+(
+    id              UUID         NOT NULL DEFAULT gen_random_uuid(),
+    login           VARCHAR(255) NOT NULL,
+    pass            VARCHAR(255) NOT NULL,
+    loyalty_balance REAL NULL DEFAULT 0,
+    CONSTRAINT PK_USERS PRIMARY KEY (id)
+);
+
+CREATE UNIQUE INDEX Index_1 ON users (login);
+
+CREATE TABLE users_orders
+(
+    user_id  UUID         NOT NULL DEFAULT gen_random_uuid(),
+    order_id VARCHAR(255) NOT NULL,
+    CONSTRAINT PK_USERS_ORDERS PRIMARY KEY (order_id)
+);
+
+CREATE TABLE users_withdrawals
+(
+    user_id               UUID NULL DEFAULT gen_random_uuid(),
+    withdraw_order_number VARCHAR(255) NOT NULL,
+    CONSTRAINT PK_USERS_WITHDRAWALS PRIMARY KEY (withdraw_order_number)
+);
+
+CREATE TABLE withdrawals
+(
+    order_number VARCHAR(255) NOT NULL,
+    sum          REAL         NOT NULL DEFAULT 0,
+    processed_at TIMESTAMP    NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    CONSTRAINT PK_WITHDRAWALS PRIMARY KEY (order_number)
+);
+
+ALTER TABLE users_orders
+    ADD CONSTRAINT FK_USERS_OR_REFERENCE_USERS FOREIGN KEY (user_id)
+        REFERENCES users (id)
+        ON DELETE CASCADE ON UPDATE CASCADE;
+
+ALTER TABLE users_orders
+    ADD CONSTRAINT FK_USERS_OR_REFERENCE_ORDERS FOREIGN KEY (order_id)
+        REFERENCES orders (id)
+        ON DELETE CASCADE ON UPDATE CASCADE;
+
+ALTER TABLE users_withdrawals
+    ADD CONSTRAINT FK_USERS_WI_REFERENCE_USERS FOREIGN KEY (user_id)
+        REFERENCES users (id)
+        ON DELETE CASCADE ON UPDATE CASCADE;
+
+ALTER TABLE users_withdrawals
+    ADD CONSTRAINT FK_USERS_WI_REFERENCE_WITHDRAW FOREIGN KEY (withdraw_order_number)
+        REFERENCES withdrawals (order_number)
+        ON DELETE CASCADE ON UPDATE CASCADE;
+-- +goose StatementEnd
+
+-- +goose Down
+-- +goose StatementBegin
+ALTER TABLE users_withdrawals DROP CONSTRAINT FK_USERS_WI_REFERENCE_WITHDRAW;
+ALTER TABLE users_withdrawals DROP CONSTRAINT FK_USERS_WI_REFERENCE_USERS;
+ALTER TABLE users_orders DROP CONSTRAINT FK_USERS_OR_REFERENCE_ORDERS;
+ALTER TABLE users_orders DROP CONSTRAINT FK_USERS_OR_REFERENCE_USERS;
+
+DROP TABLE withdrawals;
+DROP TABLE users_withdrawals;
+DROP TABLE users_orders;
+DROP TABLE users;
+DROP TABLE orders;
+-- +goose StatementEnd
+</file>
+
+<file path="README.md">
+# go-musthave-diploma-tpl
+
+Шаблон репозитория для индивидуального дипломного проекта курса «Go-разработчик»
+
+# Начало работы
+
+1. Склонируйте репозиторий в любую подходящую директорию на вашем компьютере.
+2. В корне репозитория выполните команду `go mod init <name>` (где `<name>` — адрес вашего репозитория на GitHub без
+   префикса `https://`) для создания модуля
+
+# Обновление шаблона
+
+Чтобы иметь возможность получать обновления автотестов и других частей шаблона, выполните команду:
+
+```
+git remote add -m master template https://github.com/yandex-praktikum/go-musthave-diploma-tpl.git
+```
+
+Для обновления кода автотестов выполните команду:
+
+```
+git fetch template && git checkout template/master .github
+```
+
+Затем добавьте полученные изменения в свой репозиторий.
+</file>
+
+<file path="SPECIFICATION.md">
+# Техническое задание
+
+## Накопительная система лояльности «Гофермарт»
+
+---
+
+### Общие требования
+
+Система представляет собой HTTP API со следующими требованиями к бизнес-логике:
+
+* регистрация, аутентификация и авторизация пользователей;
+* приём номеров заказов от зарегистрированных пользователей;
+* учёт и ведение списка переданных номеров заказов зарегистрированного пользователя;
+* учёт и ведение накопительного счёта зарегистрированного пользователя;
+* проверка принятых номеров заказов через систему расчёта баллов лояльности;
+* начисление за каждый подходящий номер заказа положенного вознаграждения на счёт лояльности пользователя.
+
+![image](https://pictures.s3.yandex.net:443/resources/gophermart2x_1634502166.png)
+
+### Абстрактная схема взаимодействия с системой
+
+Ниже представлена абстрактная бизнес-логика взаимодействия пользователя с системой:
+
+1. Пользователь регистрируется в системе лояльности «Гофермарт».
+2. Пользователь совершает покупку в интернет-магазине «Гофермарт».
+3. Заказ попадает в систему расчёта баллов лояльности.
+4. Пользователь передаёт номер совершённого заказа в систему лояльности.
+5. Система связывает номер заказа с пользователем и сверяет номер с системой расчёта баллов лояльности.
+6. При наличии положительного расчёта баллов лояльности производится начисление баллов лояльности на счёт пользователя.
+7. Пользователь списывает доступные баллы лояльности для частичной или полной оплаты последующих заказов в интернет-магазине «Гофермарт».
+
+Примечания:
+
+- пункт 2 представлен как гипотетический и не требует реализации в данной работе;
+- пункт 3 реализован в системе расчёта баллов лояльности и не требует реализации в данной работе.
+
+### Система расчета баллов лояльности
+
+Система расчета баллов лояльности является внешним сервисом в доверенном контуре. Он работает по принципу чёрного ящика и недоступен для инспекции внешними клиентами. Система рассчитывает положенные баллы лояльности за совершённый заказ по сложным алгоритмам, которые могут меняться в любой момент времени.
+
+Внешнему потребителю доступна только информация о количестве положенных за конкретный заказ баллов лояльности. Причины наличия или отсутствия начислений внешнему потребителю неизвестны.
+
+Протокол взаимодействия с сервисом базы будет предоставлен в конце.
+
+### Сводное HTTP API
+
+Накопительная система лояльности «Гофермарт» должна предоставлять следующие HTTP-хендлеры:
+
+* `POST /api/user/register` — регистрация пользователя;
+* `POST /api/user/login` — аутентификация пользователя;
+* `POST /api/user/orders` — загрузка пользователем номера заказа для расчёта;
+* `GET /api/user/orders` — получение списка загруженных пользователем номеров заказов, статусов их обработки и информации о начислениях;
+* `GET /api/user/balance` — получение текущего баланса счёта баллов лояльности пользователя;
+* `POST /api/user/balance/withdraw` — запрос на списание баллов с накопительного счёта в счёт оплаты нового заказа;
+* `GET /api/user/withdrawals` — получение информации о выводе средств с накопительного счёта пользователем.
+
+### Общие ограничения и требования
+
+* хранилище данных — PostgreSQL;
+* структура таблиц остаётся на усмотрение студента;
+* типы и формат хранения данных (в том числе паролей и прочей чувствительной информации) остаётся на усмотрение студента;
+* клиент может поддерживать HTTP-запросы/ответы со сжатием данных;
+* клиент не обязан делать запросы соответственно нижеизложенной спецификации API, любая проверка запроса остаётся на усмотрение студента;
+* формат и алгоритм проверки аутентификации и авторизации пользователя остаётся на усмотрение студента;
+* номера заказов уникальны и никогда не повторяются;
+* номер заказа может быть принят в обработку только один раз от одного пользователя;
+* номер заказа может не иметь никакого начисления;
+* вознаграждение начисляется и тратится в виртуальных баллах из расчёта 1 балл = 1 рубль.
+
+#### **Регистрация пользователя**
+
+Хендлер: `POST /api/user/register`.
+
+Регистрация производится по паре логин/пароль. Каждый логин должен быть уникальным.
+После успешной регистрации должна происходить автоматическая аутентификация пользователя.
+
+Формат запроса:
+
+```
+POST /api/user/register HTTP/1.1
+Content-Type: application/json
+...
+
+{
+	"login": "<login>",
+	"password": "<password>"
+}
+```
+
+Возможные коды ответа:
+
+- `200` — пользователь успешно зарегистрирован и аутентифицирован;
+- `400` — неверный формат запроса;
+- `409` — логин уже занят;
+- `500` — внутренняя ошибка сервера.
+
+#### **Аутентификация пользователя**
+
+Хендлер: `POST /api/user/login`.
+
+Аутентификация производится по паре логин/пароль.
+
+Формат запроса:
+
+```
+POST /api/user/login HTTP/1.1
+Content-Type: application/json
+...
+
+{
+	"login": "<login>",
+	"password": "<password>"
+}
+```
+
+Возможные коды ответа:
+
+- `200` — пользователь успешно аутентифицирован;
+- `400` — неверный формат запроса;
+- `401` — неверная пара логин/пароль;
+- `500` — внутренняя ошибка сервера.
+
+#### **Загрузка номера заказа**
+
+Хендлер: `POST /api/user/orders`.
+
+Хендлер доступен только аутентифицированным пользователям. Номером заказа является последовательность цифр произвольной длины.
+
+Номер заказа может быть проверен на корректность ввода с помощью [алгоритма Луна](https://ru.wikipedia.org/wiki/Алгоритм_Луна){target="_blank"}.
+
+Формат запроса:
+
+```
+POST /api/user/orders HTTP/1.1
+Content-Type: text/plain
+...
+
+12345678903
+```
+
+Возможные коды ответа:
+
+- `200` — номер заказа уже был загружен этим пользователем;
+- `202` — новый номер заказа принят в обработку;
+- `400` — неверный формат запроса;
+- `401` — пользователь не аутентифицирован;
+- `409` — номер заказа уже был загружен другим пользователем;
+- `422` — неверный формат номера заказа;
+- `500` — внутренняя ошибка сервера.
+
+#### **Получение списка загруженных номеров заказов**
+
+Хендлер: `GET /api/user/orders`.
+
+Хендлер доступен только авторизованному пользователю. Номера заказа в выдаче должны быть отсортированы по времени загрузки от самых новых к самым старым. Формат даты — RFC3339.
+
+Доступные статусы обработки расчётов:
+
+- `NEW` — заказ загружен в систему, но не попал в обработку;
+- `PROCESSING` — вознаграждение за заказ рассчитывается;
+- `INVALID` — система расчёта вознаграждений отказала в расчёте;
+- `PROCESSED` — данные по заказу проверены и информация о расчёте успешно получена.
+
+Формат запроса:
+
+```
+GET /api/user/orders HTTP/1.1
+Content-Length: 0
+```
+
+Возможные коды ответа:
+
+- `200` — успешная обработка запроса.
+
+  Формат ответа:
+
+    ```
+    200 OK HTTP/1.1
+    Content-Type: application/json
+    ...
+    
+    [
+    	{
+            "number": "9278923470",
+            "status": "PROCESSED",
+            "accrual": 500,
+            "uploaded_at": "2020-12-10T15:15:45+03:00"
+        },
+        {
+            "number": "12345678903",
+            "status": "PROCESSING",
+            "uploaded_at": "2020-12-10T15:12:01+03:00"
+        },
+        {
+            "number": "346436439",
+            "status": "INVALID",
+            "uploaded_at": "2020-12-09T16:09:53+03:00"
+        }
+    ]
+    ```
+
+- `204` — нет данных для ответа.
+- `401` — пользователь не авторизован.
+- `500` — внутренняя ошибка сервера.
+
+#### **Получение текущего баланса пользователя**
+
+Хендлер: `GET /api/user/balance`.
+
+Хендлер доступен только авторизованному пользователю. В ответе должны содержаться данные о текущей сумме баллов лояльности, а также сумме использованных за весь период регистрации баллов.
+
+Формат запроса:
+
+```
+GET /api/user/balance HTTP/1.1
+Content-Length: 0
+```
+
+Возможные коды ответа:
+
+- `200` — успешная обработка запроса.
+
+  Формат ответа:
+
+    ```
+    200 OK HTTP/1.1
+    Content-Type: application/json
+    ...
+    
+    {
+    	"current": 500.5,
+    	"withdrawn": 42
+    }
+    ```
+
+- `401` — пользователь не авторизован.
+- `500` — внутренняя ошибка сервера.
+
+#### **Запрос на списание средств**
+
+Хендлер: `POST /api/user/balance/withdraw`
+
+Хендлер доступен только авторизованному пользователю. Номер заказа представляет собой гипотетический номер нового заказа пользователя в счет оплаты которого списываются баллы.
+
+Примечание: для успешного списания достаточно успешной регистрации запроса, никаких внешних систем начисления не предусмотрено и не требуется реализовывать.
+
+Формат запроса:
+
+```
+POST /api/user/balance/withdraw HTTP/1.1
+Content-Type: application/json
+
+{
+	"order": "2377225624",
+    "sum": 751
+}
+```
+
+Здесь `order` — номер заказа, а `sum` — сумма баллов к списанию в счёт оплаты.
+
+Возможные коды ответа:
+
+- `200` — успешная обработка запроса;
+- `401` — пользователь не авторизован;
+- `402` — на счету недостаточно средств;
+- `422` — неверный номер заказа;
+- `500` — внутренняя ошибка сервера.
+
+#### **Получение информации о выводе средств**
+
+Хендлер: `GET /api/user/withdrawals`.
+
+Хендлер доступен только авторизованному пользователю. Факты выводов в выдаче должны быть отсортированы по времени вывода от самых новых к самым старым. Формат даты — RFC3339.
+
+Формат запроса:
+
+```
+GET /api/user/withdrawals HTTP/1.1
+Content-Length: 0
+```
+
+Возможные коды ответа:
+
+- `200` — успешная обработка запроса.
+
+  Формат ответа:
+
+    ```
+    200 OK HTTP/1.1
+    Content-Type: application/json
+    ...
+    
+    [
+        {
+            "order": "2377225624",
+            "sum": 500,
+            "processed_at": "2020-12-09T16:09:57+03:00"
+        }
+    ]
+    ```
+
+- `204` - нет ни одного списания.
+- `401` — пользователь не авторизован.
+- `500` — внутренняя ошибка сервера.
+
+### Взаимодействие с системой расчёта начислений баллов лояльности
+
+Для взаимодействия с системой доступен один хендлер:
+
+- `GET /api/orders/{number}` — получение информации о расчёте начислений баллов лояльности.
+
+Формат запроса:
+
+```
+GET /api/orders/{number} HTTP/1.1
+Content-Length: 0
+```
+
+Возможные коды ответа:
+
+- `200` — успешная обработка запроса.
+
+  Формат ответа:
+
+    ```
+    200 OK HTTP/1.1
+    Content-Type: application/json
+    ...
+    
+    {
+        "order": "<number>",
+        "status": "PROCESSED",
+        "accrual": 500
+    }
+    ```
+
+  Поля объекта ответа:
+
+    - `order` — номер заказа;
+    - `status` — статус расчёта начисления:
+
+        - `REGISTERED` — заказ зарегистрирован, но не начисление не рассчитано;
+        - `INVALID` — заказ не принят к расчёту, и вознаграждение не будет начислено;
+        - `PROCESSING` — расчёт начисления в процессе;
+        - `PROCESSED` — расчёт начисления окончен;
+
+    - `accrual` — рассчитанные баллы к начислению, при отсутствии начисления — поле отсутствует в ответе.
+
+- `204` - заказ не зарегистрирован в системе расчета.
+
+- `429` — превышено количество запросов к сервису.
+
+  Формат ответа:
+
+    ```
+    429 Too Many Requests HTTP/1.1
+    Content-Type: text/plain
+    Retry-After: 60
+    
+    No more than N requests per minute allowed
+    ```
+
+- `500` — внутренняя ошибка сервера.
+
+Заказ может быть взят в расчёт в любой момент после его совершения. Время выполнения расчёта системой не регламентировано. Статусы `INVALID` и `PROCESSED` являются окончательными.
+
+Общее количество запросов информации о начислении не ограничено.
+
+### Конфигурирование сервиса накопительной системы лояльности
+
+Сервис должн поддерживать конфигурирование следующими методами:
+
+- адрес и порт запуска сервиса: переменная окружения ОС `RUN_ADDRESS` или флаг `-a`
+- адрес подключения к базе данных: переменная окружения ОС `DATABASE_URI` или флаг `-d`
+- адрес системы расчёта начислений: переменная окружения ОС `ACCRUAL_SYSTEM_ADDRESS` или флаг `-r`
+</file>
+
+<file path="cmd/gophermart/main.go">
+package main
+
+import (
+	"github.com/patric-chuzhbe/diploma/internal/app"
+	"log"
+)
+
+func main() {
+	a, err := app.New()
+	if err != nil {
+		log.Fatal(err)
+	}
+	defer a.Close()
+
+	if err := a.Run(); err != nil {
+		log.Fatal(err)
+	}
+}
+</file>
+
+<file path="internal/balancesactualizer/accrualsfetcher/accrualsfetcher.go">
+package accrualsfetcher
+
+import (
+	"context"
+	"encoding/json"
+	"fmt"
+	"github.com/go-playground/validator/v10"
+	actualizerModels "github.com/patric-chuzhbe/diploma/internal/balancesactualizer/models"
+	"github.com/patric-chuzhbe/diploma/internal/models"
+	"net/http"
+	"sync"
+	"time"
+)
+
+type AccrualsFetcher struct {
+	client               *http.Client
+	accrualSystemAddress string
+	numWorkers           int
+}
+
+func (f *AccrualsFetcher) fanIn(
+	ctx context.Context,
+	doneCh chan struct{},
+	resultChs ...chan *actualizerModels.APIOrder,
+) chan *actualizerModels.APIOrder {
+	finalCh := make(chan *actualizerModels.APIOrder)
+
+	var wg sync.WaitGroup
+
+	for _, ch := range resultChs {
+		chClosure := ch
+
+		wg.Add(1)
+
+		go func() {
+			defer wg.Done()
+
+			for data := range chClosure {
+				select {
+				case <-doneCh:
+				case <-ctx.Done():
+					return
+				case finalCh <- data:
+				}
+			}
+		}()
+	}
+
+	go func() {
+		wg.Wait()
+		close(finalCh)
+	}()
+
+	return finalCh
+}
+
+func (f *AccrualsFetcher) parseAndValidateAccrualServiceResponse(
+	resp *http.Response,
+	responseDTO *actualizerModels.APIOrder,
+) error {
+	if err := json.NewDecoder(resp.Body).Decode(responseDTO); err != nil {
+		return fmt.Errorf("cannot decode response JSON body: %w", err)
+	}
+
+	validate := validator.New()
+	if err := validate.Struct(responseDTO); err != nil {
+		return fmt.Errorf("incorrect response structure: %w", err)
+	}
+
+	return nil
+}
+
+func (f *AccrualsFetcher) fetchAccrual(ctx context.Context, data *models.Order) *actualizerModels.APIOrder {
+	url := fmt.Sprintf("%s/api/orders/%s", f.accrualSystemAddress, data.Number)
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
+	if err != nil {
+		return &actualizerModels.APIOrder{
+			Err:   fmt.Errorf(fetchAccrualErr1, err),
+			Order: data.Number,
+		}
+	}
+	resp, err := f.client.Do(req)
+	if err != nil {
+		err2 := resp.Body.Close()
+		if err2 != nil {
+			return &actualizerModels.APIOrder{
+				Err:   fmt.Errorf(fetchAccrualErr2, err),
+				Order: data.Number,
+			}
+		}
+		return &actualizerModels.APIOrder{
+			Err:   fmt.Errorf(fetchAccrualErr3, err),
+			Order: data.Number,
+		}
+	}
+	defer resp.Body.Close()
+
+	var responseDTO actualizerModels.APIOrder
+
+	switch resp.StatusCode {
+	case http.StatusOK:
+		err := f.parseAndValidateAccrualServiceResponse(resp, &responseDTO)
+		if err != nil {
+			return &actualizerModels.APIOrder{
+				Err:   fmt.Errorf(fetchAccrualErr4, data.Number, err),
+				Order: data.Number,
+			}
+		}
+	case http.StatusNoContent:
+		// the order is not registered in the external system
+		responseDTO = actualizerModels.APIOrder{
+			Order:  data.Number,
+			Status: models.RemoteOrderStatusInvalid,
+		}
+	default:
+		return &actualizerModels.APIOrder{
+			Err:   fmt.Errorf(fetchAccrualErr5, resp.StatusCode, data.Number),
+			Order: data.Number,
+		}
+	}
+
+	if responseDTO.Order != data.Number {
+		return &actualizerModels.APIOrder{
+			Err:   fmt.Errorf(fetchAccrualErr6, responseDTO.Order, data.Number),
+			Order: data.Number,
+		}
+	}
+
+	return &responseDTO
+}
+
+func (f *AccrualsFetcher) fetchAccruals(
+	ctx context.Context,
+	doneCh chan struct{},
+	inputCh chan *models.Order,
+) chan *actualizerModels.APIOrder {
+	resCh := make(chan *actualizerModels.APIOrder)
+
+	go func() {
+		defer close(resCh)
+
+		for data := range inputCh {
+			result := f.fetchAccrual(ctx, data)
+
+			select {
+			case <-doneCh:
+			case <-ctx.Done():
+				return
+			case resCh <- result:
+			}
+		}
+	}()
+
+	return resCh
+}
+
+func (f *AccrualsFetcher) fanOut(
+	ctx context.Context,
+	doneCh chan struct{},
+	inputCh chan *models.Order,
+) []chan *actualizerModels.APIOrder {
+	channels := make([]chan *actualizerModels.APIOrder, f.numWorkers)
+
+	for i := 0; i < f.numWorkers; i++ {
+		fetchAccrualResultCh := f.fetchAccruals(ctx, doneCh, inputCh)
+		channels[i] = fetchAccrualResultCh
+	}
+
+	return channels
+}
+
+func (f *AccrualsFetcher) Go(
+	ctx context.Context,
+	doneCh chan struct{},
+	inputCh chan *models.Order,
+) chan *actualizerModels.APIOrder {
+	return f.fanIn(
+		ctx,
+		doneCh,
+		f.fanOut(
+			ctx,
+			doneCh,
+			inputCh,
+		)...,
+	)
+}
+
+func New(
+	httpClientTimeout time.Duration,
+	accrualSystemAddress string,
+	numFetchAccrualWorkers int,
+) *AccrualsFetcher {
+	return &AccrualsFetcher{
+		accrualSystemAddress: accrualSystemAddress,
+		numWorkers:           numFetchAccrualWorkers,
+		client:               &http.Client{Timeout: httpClientTimeout},
+	}
+}
+</file>
+
+<file path="internal/balancesactualizer/accrualsfetcher/errors.go">
+package accrualsfetcher
+
+const (
+	fetchAccrualErr1 = "in internal/balancesactualizer/accrualsfetcher/accrualsfetcher.go/fetchAccrual(): error while `http.NewRequestWithContext()` calling: %w"
+
+	fetchAccrualErr2 = "in internal/balancesactualizer/accrualsfetcher/accrualsfetcher.go/fetchAccrual(): error while `resp.Body.Close()` calling: %w"
+
+	fetchAccrualErr3 = "in internal/balancesactualizer/accrualsfetcher/accrualsfetcher.go/fetchAccrual(): error while `f.client.Do()` calling: %w"
+
+	fetchAccrualErr4 = "failed to parse response for order %s: %w"
+
+	fetchAccrualErr5 = "unexpected status code %d for order %s"
+
+	fetchAccrualErr6 = "the response order number (%s) is not equal to the target order number (%s)"
+)
+</file>
+
+<file path="internal/balancesactualizer/balancesactualizer.go">
+package balancesactualizer
+
+import (
+	"context"
+	"fmt"
+	"github.com/patric-chuzhbe/diploma/internal/balancesactualizer/accrualsfetcher"
+	"github.com/patric-chuzhbe/diploma/internal/balancesactualizer/balancesupdater"
+	"github.com/patric-chuzhbe/diploma/internal/balancesactualizer/ordersupdater"
+	"github.com/patric-chuzhbe/diploma/internal/logger"
+	"github.com/patric-chuzhbe/diploma/internal/models"
+	"time"
+)
+
+type userOrdersKeeper interface {
+	GetOrdersAndUpdateStatus(
+		ctx context.Context,
+		statusFilter []string,
+		newStatus string,
+		ordersBatchSize int,
+	) (map[string]models.Order, error)
+}
+
+type storage interface {
+	userOrdersKeeper
+	balancesupdater.Storage
+	ordersupdater.Storage
+}
+
+type BalancesActualizer struct {
+	db                             storage
+	delayBetweenOrdersQueueFetches time.Duration
+	errorChannel                   chan error
+	ordersBatchSize                int
+	accrualsFetcher                *accrualsfetcher.AccrualsFetcher
+	ordersUpdater                  *ordersupdater.OrdersUpdater
+	balancesUpdater                *balancesupdater.BalancesUpdater
+}
+
+func (a *BalancesActualizer) generator(
+	ctx context.Context,
+	doneCh chan struct{},
+	input map[string]models.Order,
+) chan *models.Order {
+	inputCh := make(chan *models.Order)
+
+	go func() {
+		defer close(inputCh)
+
+		for _, data := range input {
+			select {
+			case <-doneCh:
+			case <-ctx.Done():
+				return
+			case inputCh <- &data:
+			}
+		}
+	}()
+
+	return inputCh
+}
+
+func (a *BalancesActualizer) pipeline(ctx context.Context) {
+	input, err := a.db.GetOrdersAndUpdateStatus(
+		ctx,
+		[]string{models.LocalOrderStatusNew},
+		models.LocalOrderStatusProcessing,
+		a.ordersBatchSize,
+	)
+
+	if err != nil {
+		a.errorChannel <- fmt.Errorf(pipelineErr1, err)
+		return
+	}
+
+	doneCh := make(chan struct{})
+	defer close(doneCh)
+
+	inputCh := a.generator(ctx, doneCh, input)
+
+	fetchAccrualsResultCh := a.accrualsFetcher.Go(ctx, doneCh, inputCh)
+
+	updateOrdersResultCh := a.ordersUpdater.Go(ctx, doneCh, fetchAccrualsResultCh)
+
+	resultCh := a.balancesUpdater.Go(ctx, doneCh, updateOrdersResultCh)
+
+	for resCh := range resultCh {
+		if resCh.Err != nil {
+			a.errorChannel <- fmt.Errorf(pipelineErr2, resCh.Err)
+		}
+	}
+}
+
+func (a *BalancesActualizer) Run(ctx context.Context) {
+	go func() {
+		ticker := time.NewTicker(a.delayBetweenOrdersQueueFetches)
+		defer ticker.Stop()
+
+		for {
+			select {
+			case <-ctx.Done():
+				logger.Log.Infoln("BalancesActualizer.Run() stopped")
+				return
+			case <-ticker.C:
+				a.pipeline(ctx)
+			}
+		}
+	}()
+}
+
+func (a *BalancesActualizer) ListenErrors(callback func(error)) {
+	go func() {
+		for err := range a.errorChannel {
+			callback(err)
+		}
+	}()
+}
+
+func New(
+	db storage,
+	delayBetweenOrdersQueueFetches time.Duration,
+	errorChannelCapacity int,
+	ordersBatchSize int,
+	httpClientTimeout time.Duration,
+	accrualSystemAddress string,
+	numFetchAccrualWorkers int,
+	numUpdateOrdersWorkers int,
+	numUpdateBalancesWorkers int,
+) *BalancesActualizer {
+	return &BalancesActualizer{
+		db:                             db,
+		delayBetweenOrdersQueueFetches: delayBetweenOrdersQueueFetches,
+		errorChannel:                   make(chan error, errorChannelCapacity),
+		ordersBatchSize:                ordersBatchSize,
+		accrualsFetcher: accrualsfetcher.New(
+			httpClientTimeout,
+			accrualSystemAddress,
+			numFetchAccrualWorkers,
+		),
+		ordersUpdater:   ordersupdater.New(db, numUpdateOrdersWorkers),
+		balancesUpdater: balancesupdater.New(db, numUpdateBalancesWorkers),
+	}
+}
+</file>
+
+<file path="internal/balancesactualizer/balancesupdater/balancesupdater.go">
+package balancesupdater
+
+import (
+	"context"
+	"database/sql"
+	"fmt"
+	actualizerModels "github.com/patric-chuzhbe/diploma/internal/balancesactualizer/models"
+	"github.com/patric-chuzhbe/diploma/internal/models"
+	"sync"
+)
+
+type transactioner interface {
+	BeginTransaction() (*sql.Tx, error)
+
+	RollbackTransaction(transaction *sql.Tx) error
+
+	CommitTransaction(transaction *sql.Tx) (err error)
+}
+
+type ordersKeeper interface {
+	GetUsersByOrders(
+		ctx context.Context,
+		orderNumbers []string,
+		transaction *sql.Tx,
+	) ([]models.User, map[string][]string, error)
+
+	UpdateOrders(
+		ctx context.Context,
+		orders map[string]models.Order,
+		outerTransaction *sql.Tx,
+	) error
+}
+
+type usersKeeper interface {
+	UpdateUsers(
+		ctx context.Context,
+		users []models.User,
+		outerTransaction *sql.Tx,
+	) error
+}
+
+type Storage interface {
+	transactioner
+	ordersKeeper
+	usersKeeper
+}
+
+type BalancesUpdater struct {
+	numWorkers int
+	db         Storage
+}
+
+func (u *BalancesUpdater) fanIn(
+	ctx context.Context,
+	doneCh chan struct{},
+	resultChs ...chan *actualizerModels.UpdateBalanceRes,
+) chan *actualizerModels.UpdateBalanceRes {
+	finalCh := make(chan *actualizerModels.UpdateBalanceRes)
+
+	var wg sync.WaitGroup
+
+	for _, ch := range resultChs {
+		chClosure := ch
+
+		wg.Add(1)
+
+		go func() {
+			defer wg.Done()
+
+			for data := range chClosure {
+				select {
+				case <-doneCh:
+				case <-ctx.Done():
+					return
+				case finalCh <- data:
+				}
+			}
+		}()
+	}
+
+	go func() {
+		wg.Wait()
+		close(finalCh)
+	}()
+
+	return finalCh
+}
+
+func (u *BalancesUpdater) updateBalance(
+	ctx context.Context,
+	data *actualizerModels.UpdateOrderRes,
+) *actualizerModels.UpdateBalanceRes {
+	transaction, err := u.db.BeginTransaction()
+	if err != nil {
+		return &actualizerModels.UpdateBalanceRes{Err: fmt.Errorf(updateBalanceErr1, err)}
+	}
+
+	users, _, err := u.db.GetUsersByOrders(
+		ctx,
+		[]string{data.Number},
+		transaction,
+	)
+	if err != nil {
+		err2 := u.db.RollbackTransaction(transaction)
+		if err2 != nil {
+			return &actualizerModels.UpdateBalanceRes{Err: fmt.Errorf(updateBalanceErr2, err2)}
+		}
+		return &actualizerModels.UpdateBalanceRes{Err: fmt.Errorf(updateBalanceErr3, err)}
+	}
+
+	orders := map[string]models.Order{}
+
+	result := &actualizerModels.UpdateBalanceRes{}
+
+	for i := range users {
+		if data.Err != nil {
+			data.Status = models.LocalOrderStatusNew
+			orders[data.Number] = data.Order
+			result = &actualizerModels.UpdateBalanceRes{
+				Err: fmt.Errorf(updateBalanceErr4, data.Number, data.Err),
+				Order: models.Order{
+					Number: data.Number,
+				},
+			}
+			continue
+		}
+		users[i].LoyaltyBalance += *data.Accrual
+		data.Status = models.LocalOrderStatusProcessed
+		orders[data.Number] = data.Order
+	}
+
+	err = u.db.UpdateUsers(ctx, users, transaction)
+	if err != nil {
+		err2 := u.db.RollbackTransaction(transaction)
+		if err2 != nil {
+			return &actualizerModels.UpdateBalanceRes{Err: fmt.Errorf(updateBalanceErr2, err2)}
+		}
+		return &actualizerModels.UpdateBalanceRes{Err: fmt.Errorf(updateBalanceErr5, err)}
+	}
+
+	err = u.db.UpdateOrders(ctx, orders, transaction)
+	if err != nil {
+		err2 := u.db.RollbackTransaction(transaction)
+		if err2 != nil {
+			return &actualizerModels.UpdateBalanceRes{Err: fmt.Errorf(updateBalanceErr2, err2)}
+		}
+		return &actualizerModels.UpdateBalanceRes{Err: fmt.Errorf(updateBalanceErr6, err)}
+	}
+
+	err = u.db.CommitTransaction(transaction)
+	if err != nil {
+		err2 := u.db.RollbackTransaction(transaction)
+		if err2 != nil {
+			return &actualizerModels.UpdateBalanceRes{Err: fmt.Errorf(updateBalanceErr2, err2)}
+		}
+		return &actualizerModels.UpdateBalanceRes{Err: fmt.Errorf(updateBalanceErr7, err)}
+	}
+
+	return result
+}
+
+func (u *BalancesUpdater) updateBalances(
+	ctx context.Context,
+	doneCh chan struct{},
+	inputCh chan *actualizerModels.UpdateOrderRes,
+) chan *actualizerModels.UpdateBalanceRes {
+	resCh := make(chan *actualizerModels.UpdateBalanceRes)
+
+	go func() {
+		defer close(resCh)
+
+		for data := range inputCh {
+			result := u.updateBalance(ctx, data)
+
+			select {
+			case <-doneCh:
+			case <-ctx.Done():
+				return
+			case resCh <- result:
+			}
+		}
+	}()
+
+	return resCh
+}
+
+func (u *BalancesUpdater) fanOut(
+	ctx context.Context,
+	doneCh chan struct{},
+	inputCh chan *actualizerModels.UpdateOrderRes,
+) []chan *actualizerModels.UpdateBalanceRes {
+	channels := make([]chan *actualizerModels.UpdateBalanceRes, u.numWorkers)
+
+	for i := 0; i < u.numWorkers; i++ {
+		updateBalancesResultCh := u.updateBalances(ctx, doneCh, inputCh)
+		channels[i] = updateBalancesResultCh
+	}
+
+	return channels
+}
+
+func (u *BalancesUpdater) Go(
+	ctx context.Context,
+	doneCh chan struct{},
+	inputCh chan *actualizerModels.UpdateOrderRes,
+) chan *actualizerModels.UpdateBalanceRes {
+	return u.fanIn(
+		ctx,
+		doneCh,
+		u.fanOut(
+			ctx,
+			doneCh,
+			inputCh,
+		)...,
+	)
+}
+
+func New(db Storage, numUpdateBalancesWorkers int) *BalancesUpdater {
+	return &BalancesUpdater{
+		numWorkers: numUpdateBalancesWorkers,
+		db:         db,
+	}
+}
+</file>
+
+<file path="internal/balancesactualizer/balancesupdater/errors.go">
+package balancesupdater
+
+const (
+	updateBalanceErr1 = "in internal/balancesactualizer/balancesupdater/balancesupdater.go/updateBalance(): error while `u.db.BeginTransaction()` calling: %w"
+
+	updateBalanceErr2 = "in internal/balancesactualizer/balancesupdater/balancesupdater.go/updateBalance(): error while `u.db.RollbackTransaction()` calling: %w"
+
+	updateBalanceErr3 = "in internal/balancesactualizer/balancesupdater/balancesupdater.go/updateBalance(): error while `u.db.GetUsersByOrders()` calling: %w"
+
+	updateBalanceErr4 = "in internal/balancesactualizer/balancesupdater/balancesupdater.go/updateBalance(): " +
+		"rolled back the order no. %s state to `NEW` " +
+		"because of error in data from the previous pipeline operation: %w"
+
+	updateBalanceErr5 = "in internal/balancesactualizer/balancesupdater/balancesupdater.go/updateBalance(): error while `u.db.UpdateUsers()` calling: %w"
+
+	updateBalanceErr6 = "in internal/balancesactualizer/balancesupdater/balancesupdater.go/updateBalance(): error while `u.db.UpdateOrders()` calling: %w"
+
+	updateBalanceErr7 = "in internal/balancesactualizer/balancesupdater/balancesupdater.go/updateBalance(): error while `u.db.CommitTransaction()` calling: %w"
+)
+</file>
+
+<file path="internal/balancesactualizer/errors.go">
+package balancesactualizer
+
+const (
+	pipelineErr1 = "in internal/balancesactualizer/balancesactualizer.go/pipeline(): error while `a.db.GetOrdersAndUpdateStatus()` calling: %w"
+
+	pipelineErr2 = "in internal/balancesactualizer/balancesactualizer.go/pipeline(): error while the `resultCh` iterating: %w"
+)
+</file>
+
+<file path="internal/balancesactualizer/models/models.go">
+package models
+
+import "github.com/patric-chuzhbe/diploma/internal/models"
+
+type APIOrder struct {
+	Order   string  `json:"order"`
+	Status  string  `json:"status"`
+	Accrual float32 `json:"accrual,omitempty"`
+	Err     error
+}
+
+type UpdateOrderRes struct {
+	models.Order
+	Err error
+}
+
+type UpdateBalanceRes struct {
+	models.Order
+	Err error
+}
+</file>
+
+<file path="internal/balancesactualizer/ordersupdater/errors.go">
+package ordersupdater
+
+const (
+	updateOrderErr1 = "in internal/balancesactualizer/ordersupdater/ordersupdater.go/updateOrder(): error in data from the previous pipeline operation: %w"
+
+	updateOrderErr2 = "in internal/balancesactualizer/ordersupdater/ordersupdater.go/updateOrder(): error while `u.db.BeginTransaction()` calling: %w"
+
+	updateOrderErr3 = "in internal/balancesactualizer/ordersupdater/ordersupdater.go/updateOrder(): error while `u.db.RollbackTransaction()` calling: %w"
+
+	updateOrderErr4 = "in internal/balancesactualizer/ordersupdater/ordersupdater.go/updateOrder(): error while `u.db.GetOrderByID()` calling: %w"
+
+	updateOrderErr5 = "in internal/balancesactualizer/ordersupdater/ordersupdater.go/updateOrder(): error while `u.db.RollbackTransaction()` calling: %w"
+
+	updateOrderErr6 = "in internal/balancesactualizer/ordersupdater/ordersupdater.go/updateOrder(): error while `u.db.UpdateOrders()` calling: %w"
+
+	updateOrderErr7 = "in internal/balancesactualizer/ordersupdater/ordersupdater.go/updateOrder(): error while `u.db.RollbackTransaction()` calling: %w"
+
+	updateOrderErr8 = "in internal/balancesactualizer/ordersupdater/ordersupdater.go/updateOrder(): error while `u.db.CommitTransaction()` calling: %w"
+)
+</file>
+
+<file path="internal/balancesactualizer/ordersupdater/ordersupdater.go">
+package ordersupdater
+
+import (
+	"context"
+	"database/sql"
+	"fmt"
+	actualizerModels "github.com/patric-chuzhbe/diploma/internal/balancesactualizer/models"
+	"github.com/patric-chuzhbe/diploma/internal/models"
+	"sync"
+)
+
+type transactioner interface {
+	BeginTransaction() (*sql.Tx, error)
+
+	RollbackTransaction(transaction *sql.Tx) error
+
+	CommitTransaction(transaction *sql.Tx) (err error)
+}
+
+type ordersKeeper interface {
+	GetOrderByID(
+		ctx context.Context,
+		ID string,
+		transaction *sql.Tx,
+	) (*models.Order, error)
+
+	UpdateOrders(
+		ctx context.Context,
+		orders map[string]models.Order,
+		outerTransaction *sql.Tx,
+	) error
+}
+
+type Storage interface {
+	transactioner
+	ordersKeeper
+}
+
+type OrdersUpdater struct {
+	db         Storage
+	numWorkers int
+}
+
+var remoteToLocalStatusMapping = map[string]string{
+	models.RemoteOrderStatusRegistered: models.LocalOrderStatusNew,
+	models.RemoteOrderStatusProcessing: models.LocalOrderStatusNew,
+	models.RemoteOrderStatusProcessed:  models.LocalOrderStatusProcessing,
+	models.RemoteOrderStatusInvalid:    models.LocalOrderStatusInvalid,
+}
+
+func (u *OrdersUpdater) fanIn(
+	ctx context.Context,
+	doneCh chan struct{},
+	resultChs ...chan *actualizerModels.UpdateOrderRes,
+) chan *actualizerModels.UpdateOrderRes {
+	finalCh := make(chan *actualizerModels.UpdateOrderRes)
+
+	var wg sync.WaitGroup
+
+	for _, ch := range resultChs {
+		chClosure := ch
+
+		wg.Add(1)
+
+		go func() {
+			defer wg.Done()
+
+			for data := range chClosure {
+				select {
+				case <-doneCh:
+				case <-ctx.Done():
+					return
+				case finalCh <- data:
+				}
+			}
+		}()
+	}
+
+	go func() {
+		wg.Wait()
+		close(finalCh)
+	}()
+
+	return finalCh
+}
+
+func (u *OrdersUpdater) updateOrder(
+	ctx context.Context,
+	data *actualizerModels.APIOrder,
+) *actualizerModels.UpdateOrderRes {
+	if data.Err != nil {
+		return &actualizerModels.UpdateOrderRes{
+			Err: fmt.Errorf(updateOrderErr1, data.Err),
+			Order: models.Order{
+				Number: data.Order,
+			},
+		}
+	}
+
+	transaction, err := u.db.BeginTransaction()
+	if err != nil {
+		return &actualizerModels.UpdateOrderRes{
+			Err: fmt.Errorf(updateOrderErr2, err),
+			Order: models.Order{
+				Number: data.Order,
+			},
+		}
+	}
+
+	order, err := u.db.GetOrderByID(ctx, data.Order, transaction)
+	if err != nil {
+		err2 := u.db.RollbackTransaction(transaction)
+		if err2 != nil {
+			return &actualizerModels.UpdateOrderRes{
+				Err: fmt.Errorf(updateOrderErr3, err2),
+				Order: models.Order{
+					Number: data.Order,
+				},
+			}
+		}
+		return &actualizerModels.UpdateOrderRes{
+			Err: fmt.Errorf(updateOrderErr4, err),
+			Order: models.Order{
+				Number: data.Order,
+			},
+		}
+	}
+	order.Accrual = &data.Accrual
+	order.Status = remoteToLocalStatusMapping[data.Status]
+	err = u.db.UpdateOrders(
+		ctx,
+		map[string]models.Order{order.Number: *order},
+		transaction,
+	)
+	if err != nil {
+		err2 := u.db.RollbackTransaction(transaction)
+		if err2 != nil {
+			return &actualizerModels.UpdateOrderRes{
+				Err: fmt.Errorf(updateOrderErr5, err2),
+				Order: models.Order{
+					Number: data.Order,
+				},
+			}
+		}
+		return &actualizerModels.UpdateOrderRes{
+			Err: fmt.Errorf(updateOrderErr6, err),
+			Order: models.Order{
+				Number: data.Order,
+			},
+		}
+	}
+
+	err = u.db.CommitTransaction(transaction)
+	if err != nil {
+		err2 := u.db.RollbackTransaction(transaction)
+		if err2 != nil {
+			return &actualizerModels.UpdateOrderRes{
+				Err: fmt.Errorf(updateOrderErr7, err2),
+				Order: models.Order{
+					Number: data.Order,
+				},
+			}
+		}
+		return &actualizerModels.UpdateOrderRes{
+			Err: fmt.Errorf(updateOrderErr8, err),
+			Order: models.Order{
+				Number: data.Order,
+			},
+		}
+	}
+
+	return &actualizerModels.UpdateOrderRes{
+		Order: *order,
+	}
+}
+
+func (u *OrdersUpdater) updateOrders(
+	ctx context.Context,
+	doneCh chan struct{},
+	inputCh chan *actualizerModels.APIOrder,
+) chan *actualizerModels.UpdateOrderRes {
+	resCh := make(chan *actualizerModels.UpdateOrderRes)
+
+	go func() {
+		defer close(resCh)
+
+		for data := range inputCh {
+			result := u.updateOrder(ctx, data)
+
+			select {
+			case <-doneCh:
+			case <-ctx.Done():
+				return
+			case resCh <- result:
+			}
+		}
+	}()
+
+	return resCh
+}
+
+func (u *OrdersUpdater) fanOut(
+	ctx context.Context,
+	doneCh chan struct{},
+	inputCh chan *actualizerModels.APIOrder,
+) []chan *actualizerModels.UpdateOrderRes {
+	channels := make([]chan *actualizerModels.UpdateOrderRes, u.numWorkers)
+
+	for i := 0; i < u.numWorkers; i++ {
+		updateOrdersResultCh := u.updateOrders(ctx, doneCh, inputCh)
+		channels[i] = updateOrdersResultCh
+	}
+
+	return channels
+}
+
+func (u *OrdersUpdater) Go(
+	ctx context.Context,
+	doneCh chan struct{},
+	inputCh chan *actualizerModels.APIOrder,
+) chan *actualizerModels.UpdateOrderRes {
+	return u.fanIn(
+		ctx,
+		doneCh,
+		u.fanOut(
+			ctx,
+			doneCh,
+			inputCh,
+		)...,
+	)
+}
+
+func New(db Storage, numUpdateOrdersWorkers int) *OrdersUpdater {
+	return &OrdersUpdater{
+		db:         db,
+		numWorkers: numUpdateOrdersWorkers,
+	}
+}
+</file>
+
+<file path="internal/db/postgresdb/errors.go">
+package postgresdb
+
+const (
+	getUserBalanceAndWithdrawalsErr1 = "in internal/db/postgresdb/balances.go/GetUserBalanceAndWithdrawals(): error while `row.Scan()` calling: %w"
+
+	withdrawErr1 = "in internal/db/postgresdb/balances.go/Withdraw(): error while `db.database.Begin()` calling: %w"
+
+	withdrawErr2 = "in internal/db/postgresdb/balances.go/Withdraw(): error while `transaction.Rollback()` calling: %w"
+
+	withdrawErr3 = "in internal/db/postgresdb/balances.go/Withdraw(): error while `transaction.QueryRowContext()` calling: %w"
+
+	withdrawErr4 = "in internal/db/postgresdb/balances.go/Withdraw(): error while `transaction.ExecContext()` calling: %w"
+
+	withdrawErr5 = "in internal/db/postgresdb/balances.go/Withdraw(): error while `transaction.Commit()` calling: %w"
+
+	getUserWithdrawalsErr1 = "in internal/db/postgresdb/balances.go/GetUserWithdrawals(): error while `db.database.QueryContext()` calling: %w"
+
+	getUserWithdrawalsErr2 = "in internal/db/postgresdb/balances.go/GetUserWithdrawals(): error while `rows.Scan()` calling: %w"
+
+	getUserWithdrawalsErr3 = "in internal/db/postgresdb/balances.go/GetUserWithdrawals(): error while `rows.Err()` calling: %w"
+
+	getOrderByIDErr1 = "in internal/db/postgresdb/orders.go/GetOrderByID(): error while `row.Scan()` calling: %w"
+
+	getOrdersAndUpdateStatusErr1 = "in internal/db/postgresdb/orders.go/GetOrdersAndUpdateStatus(): error while `db.database.QueryContext()` calling: %w"
+
+	getOrdersAndUpdateStatusErr2 = "in internal/db/postgresdb/orders.go/GetOrdersAndUpdateStatus(): error while `rows.Scan()` calling: %w"
+
+	getOrdersAndUpdateStatusErr3 = "in internal/db/postgresdb/orders.go/GetOrdersAndUpdateStatus(): error while `rows.Err()` calling: %w"
+
+	updateOrdersErr1 = "in internal/db/postgresdb/orders.go/UpdateOrders(): error while `db.BeginTransaction()` calling: %w"
+
+	updateOrdersErr2 = "in internal/db/postgresdb/orders.go/UpdateOrders(): error while `db.RollbackTransaction()` calling: %w"
+
+	updateOrdersErr3 = "in internal/db/postgresdb/orders.go/UpdateOrders(): error while `innerTransaction.ExecContext()` calling: %w"
+
+	updateOrdersErr4 = "in internal/db/postgresdb/orders.go/UpdateOrders(): error while `db.CommitTransaction()` calling: %w"
+
+	getOrdersErr1 = "in internal/db/postgresdb/orders.go/GetOrders(): error while `transaction.QueryContext()` calling: %w"
+
+	getOrdersErr2 = "in internal/db/postgresdb/orders.go/GetOrders(): error while `rows.Scan()` calling: %w"
+
+	getOrdersErr3 = "in internal/db/postgresdb/orders.go/GetOrders(): error while `rows.Err()` calling: %w"
+
+	saveNewOrderForUserErr1 = "in internal/db/postgresdb/orders.go/SaveNewOrderForUser(): error while `db.database.QueryRowContext()` calling: %w"
+
+	getUserOrdersErr1 = "in internal/db/postgresdb/orders.go/GetUserOrders(): error while `db.database.QueryContext()` calling: %w"
+
+	getUserOrdersErr2 = "in internal/db/postgresdb/orders.go/GetUserOrders(): error while `rows.Scan()` calling: %w"
+
+	getUserOrdersErr3 = "in internal/db/postgresdb/orders.go/GetUserOrders(): error while `rows.Err()` calling: %w"
+
+	newErr1 = "in internal/db/postgresdb/postgresdb.go/New(): error while `sql.Open()` calling: %w"
+
+	newErr2 = "in internal/db/postgresdb/postgresdb.go/New(): error while `goose.SetDialect()` calling: %w"
+
+	newErr3 = "in internal/db/postgresdb/postgresdb.go/New(): error while `goose.Up()` calling: %w"
+
+	closeErr1 = "in internal/db/postgresdb/postgresdb.go/Close(): error while `db.database.Close()` calling: %w"
+
+	updateUsersErr1 = "in internal/db/postgresdb/users.go/UpdateUsers(): error while `db.BeginTransaction()` calling: %w"
+
+	updateUsersErr2 = "in internal/db/postgresdb/users.go/UpdateUsers(): error while `db.RollbackTransaction()` calling: %w"
+
+	updateUsersErr3 = "in internal/db/postgresdb/users.go/UpdateUsers(): error while `innerTransaction.ExecContext()` calling: %w"
+
+	updateUsersErr4 = "in internal/db/postgresdb/users.go/UpdateUsers(): error while `db.CommitTransaction()` calling: %w"
+
+	getUsersByOrdersErr1 = "in internal/db/postgresdb/users.go/GetUsersByOrders(): error while `transaction.QueryContext()` calling: %w"
+
+	getUsersByOrdersErr2 = "in internal/db/postgresdb/users.go/GetUsersByOrders(): error while `rows.Scan()` calling: %w"
+
+	getUsersByOrdersErr3 = "in internal/db/postgresdb/users.go/GetUsersByOrders(): error while `rows.Err()` calling: %w"
+
+	getUserByIDErr1 = "in internal/db/postgresdb/users.go/GetUserByID(): error while `row.Scan()` calling: %w"
+
+	createUserErr1 = "in internal/db/postgresdb/users.go/CreateUser(): error while `db.database.QueryRowContext()` calling: %w"
+
+	getUserIDByLoginAndPasswordErr1 = "in internal/db/postgresdb/users.go/GetUserIDByLoginAndPassword(): error while `db.database.QueryRowContext()` calling: %w"
+)
+</file>
+
+<file path="cmd/gophermart/migrations/20250330095048_initial_db_structure.sql">
+-- +goose Up
+-- +goose StatementBegin
+CREATE TABLE orders
+(
+    id          VARCHAR(255) NOT NULL,
+    status      VARCHAR(255) NOT NULL
+        CONSTRAINT CKC_STATUS_ORDERS CHECK (status IN ('NEW', 'PROCESSING', 'INVALID', 'PROCESSED')),
+    uploaded_at TIMESTAMP    NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    accrual     REAL NULL,
+    CONSTRAINT PK_ORDERS PRIMARY KEY (id)
+);
+
+CREATE TABLE users
+(
+    id              UUID         NOT NULL DEFAULT gen_random_uuid(),
+    login           VARCHAR(255) NOT NULL,
+    pass            VARCHAR(255) NOT NULL,
+    loyalty_balance REAL NULL DEFAULT 0,
+    CONSTRAINT PK_USERS PRIMARY KEY (id)
+);
+
+CREATE UNIQUE INDEX Index_1 ON users (login);
+
+CREATE TABLE users_orders
+(
+    user_id  UUID         NOT NULL DEFAULT gen_random_uuid(),
+    order_id VARCHAR(255) NOT NULL,
+    CONSTRAINT PK_USERS_ORDERS PRIMARY KEY (order_id)
+);
+
+CREATE TABLE users_withdrawals
+(
+    user_id               UUID NULL DEFAULT gen_random_uuid(),
+    withdraw_order_number VARCHAR(255) NOT NULL,
+    CONSTRAINT PK_USERS_WITHDRAWALS PRIMARY KEY (withdraw_order_number)
+);
+
+CREATE TABLE withdrawals
+(
+    order_number VARCHAR(255) NOT NULL,
+    sum          REAL         NOT NULL DEFAULT 0,
+    processed_at TIMESTAMP    NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    CONSTRAINT PK_WITHDRAWALS PRIMARY KEY (order_number)
+);
+
+ALTER TABLE users_orders
+    ADD CONSTRAINT FK_USERS_OR_REFERENCE_USERS FOREIGN KEY (user_id)
+        REFERENCES users (id)
+        ON DELETE CASCADE ON UPDATE CASCADE;
+
+ALTER TABLE users_orders
+    ADD CONSTRAINT FK_USERS_OR_REFERENCE_ORDERS FOREIGN KEY (order_id)
+        REFERENCES orders (id)
+        ON DELETE CASCADE ON UPDATE CASCADE;
+
+ALTER TABLE users_withdrawals
+    ADD CONSTRAINT FK_USERS_WI_REFERENCE_USERS FOREIGN KEY (user_id)
+        REFERENCES users (id)
+        ON DELETE CASCADE ON UPDATE CASCADE;
+
+ALTER TABLE users_withdrawals
+    ADD CONSTRAINT FK_USERS_WI_REFERENCE_WITHDRAW FOREIGN KEY (withdraw_order_number)
+        REFERENCES withdrawals (order_number)
+        ON DELETE CASCADE ON UPDATE CASCADE;
+-- +goose StatementEnd
+
+-- +goose Down
+-- +goose StatementBegin
+ALTER TABLE users_withdrawals DROP CONSTRAINT FK_USERS_WI_REFERENCE_WITHDRAW;
+ALTER TABLE users_withdrawals DROP CONSTRAINT FK_USERS_WI_REFERENCE_USERS;
+ALTER TABLE users_orders DROP CONSTRAINT FK_USERS_OR_REFERENCE_ORDERS;
+ALTER TABLE users_orders DROP CONSTRAINT FK_USERS_OR_REFERENCE_USERS;
+
+DROP TABLE withdrawals;
+DROP TABLE users_withdrawals;
+DROP TABLE users_orders;
+DROP TABLE users;
+DROP TABLE orders;
+-- +goose StatementEnd
+</file>
+
+<file path="internal/auth/auth.go">
+package auth
+
+import (
+	"context"
+	"fmt"
+	"github.com/golang-jwt/jwt/v4"
+	"github.com/patric-chuzhbe/diploma/internal/logger"
+	"github.com/patric-chuzhbe/diploma/internal/models"
+	"go.uber.org/zap"
+	"net/http"
+)
+
+type usersKeeper interface {
+	CreateUser(ctx context.Context, usr *models.User) (string, error)
+
+	GetUserByID(
+		ctx context.Context,
+		userID string,
+	) (*models.User, error)
+}
+
+type Auth struct {
+	db                         usersKeeper
+	authCookieName             string
+	authCookieSigningSecretKey []byte
+}
+
+type Claims struct {
+	jwt.RegisteredClaims
+	UserID string `json:"user_id"`
+}
+
+type ContextKey string
+
+const UserIDKey ContextKey = "userID"
+
+func (a *Auth) getTokenStringFromAuthorizationHeaderOrCookie(request *http.Request) string {
+	tokenString := request.Header.Get("Authorization")
+	if tokenString != "" {
+		return tokenString
+	}
+	cookie, err := request.Cookie(a.authCookieName)
+	if err == nil {
+		tokenString = cookie.Value
+	}
+
+	return tokenString
+}
+
+func (a *Auth) getUserIDFromAuthorizationHeaderOrCookie(request *http.Request) (string, error) {
+	tokenString := a.getTokenStringFromAuthorizationHeaderOrCookie(request)
+	claims := &Claims{}
+	token, err := jwt.ParseWithClaims(
+		tokenString,
+		claims,
+		func(t *jwt.Token) (interface{}, error) {
+			if _, ok := t.Method.(*jwt.SigningMethodHMAC); !ok {
+				return nil, fmt.Errorf("unexpected signing method: %v", t.Header["alg"])
+			}
+			return a.authCookieSigningSecretKey, nil
+		},
+	)
+	if err != nil || !token.Valid {
+		return "", nil
+	}
+
+	return claims.UserID, nil
+}
+
+func (a *Auth) AuthenticateUser(h http.Handler) http.Handler {
+	middleware := func(response http.ResponseWriter, request *http.Request) {
+		userID, err := a.getUserIDFromAuthorizationHeaderOrCookie(request)
+		if err != nil {
+			logger.Log.Debugln("Error calling the `a.getUserIDFromAuthorizationHeaderOrCookie()`: ", zap.Error(err))
+			response.WriteHeader(http.StatusInternalServerError)
+			return
+		}
+
+		usr, err := a.db.GetUserByID(request.Context(), userID)
+		if err != nil {
+			logger.Log.Debugln("Error calling the `a.db.GetUserByID()`: ", zap.Error(err))
+			response.WriteHeader(http.StatusInternalServerError)
+			return
+		}
+
+		ctx := context.WithValue(request.Context(), UserIDKey, usr.ID)
+		requestWithCtx := request.WithContext(ctx)
+
+		h.ServeHTTP(response, requestWithCtx)
+	}
+
+	return http.HandlerFunc(middleware)
+}
+
+func New(
+	db usersKeeper,
+	authCookieName string,
+	authCookieSigningSecretKey []byte,
+) *Auth {
+	return &Auth{
+		db:                         db,
+		authCookieName:             authCookieName,
+		authCookieSigningSecretKey: authCookieSigningSecretKey,
+	}
+}
+
+func (a *Auth) buildJWTString(claims *Claims) (string, error) {
+	token := jwt.NewWithClaims(jwt.SigningMethodHS256, *claims)
+
+	tokenString, err := token.SignedString(a.authCookieSigningSecretKey)
+	if err != nil {
+		return "", err
+	}
+
+	return tokenString, nil
+}
+
+func (a *Auth) SetAuthData(userID string, response http.ResponseWriter) error {
+	JWTString, err := a.buildJWTString(&Claims{UserID: userID})
+	if err != nil {
+		return err
+	}
+
+	response.Header().Set("Authorization", JWTString)
+
+	http.SetCookie(
+		response,
+		&http.Cookie{
+			Name:  a.authCookieName,
+			Value: JWTString,
+		},
+	)
+
+	return nil
+}
+</file>
+
+<file path="internal/db/postgresdb/balances.go">
+package postgresdb
+
+import (
+	"context"
+	"database/sql"
+	"errors"
+	"fmt"
+	"github.com/patric-chuzhbe/diploma/internal/models"
+)
+
+func (db *PostgresDB) GetUserBalanceAndWithdrawals(
+	ctx context.Context,
+	userID string,
+) (*models.UserBalanceAndWithdrawals, error) {
+	row := db.database.QueryRowContext(ctx, getUserBalanceAndWithdrawalsQuery, userID)
+	var userIDFromDB string
+	var balance float32
+	var withdrawalsSum sql.NullFloat64
+	err := row.Scan(
+		&userIDFromDB,
+		&balance,
+		&withdrawalsSum,
+	)
+	if errors.Is(err, sql.ErrNoRows) {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, fmt.Errorf(getUserBalanceAndWithdrawalsErr1, err)
+	}
+
+	withdrawalsSumValue := float32(0)
+	if withdrawalsSum.Valid {
+		withdrawalsSumValue = float32(withdrawalsSum.Float64)
+	}
+
+	return &models.UserBalanceAndWithdrawals{
+		Current:   balance,
+		Withdrawn: withdrawalsSumValue,
+	}, nil
+}
+
+func (db *PostgresDB) Withdraw(
+	ctx context.Context,
+	userID string,
+	orderNumber string,
+	withdrawSum float32,
+) error {
+	transaction, err := db.database.Begin()
+	if err != nil {
+		return fmt.Errorf(withdrawErr1, err)
+	}
+
+	var loyaltyBalance float32
+	err = transaction.QueryRowContext(ctx, selectUserBalanceQuery, userID).Scan(&loyaltyBalance)
+	if err != nil {
+		err2 := transaction.Rollback()
+		if err2 != nil {
+			return fmt.Errorf(withdrawErr2, err2)
+		}
+		return fmt.Errorf(withdrawErr3, err)
+	}
+
+	if loyaltyBalance < withdrawSum {
+		err = transaction.Rollback()
+		if err != nil {
+			return fmt.Errorf(withdrawErr2, err)
+		}
+		return models.ErrNotEnoughBalance
+	}
+
+	var orderNumberFromDB string
+	err = transaction.QueryRowContext(
+		ctx,
+		insertWithdrawalQuery,
+		orderNumber,
+		withdrawSum,
+	).Scan(&orderNumberFromDB)
+
+	if errors.Is(err, sql.ErrNoRows) {
+		err2 := transaction.Rollback()
+		if err2 != nil {
+			return fmt.Errorf(withdrawErr5, err2)
+		}
+		return models.ErrAlreadyWithdrawn
+	}
+
+	if err != nil {
+		err2 := transaction.Rollback()
+		if err2 != nil {
+			return fmt.Errorf(withdrawErr2, err2)
+		}
+		return fmt.Errorf(withdrawErr3, err)
+	}
+
+	_, err = transaction.ExecContext(
+		ctx,
+		insertUserWithdrawalQuery,
+		userID,
+		orderNumber,
+	)
+	if err != nil {
+		err2 := transaction.Rollback()
+		if err2 != nil {
+			return fmt.Errorf(withdrawErr2, err2)
+		}
+		return fmt.Errorf(withdrawErr4, err)
+	}
+
+	loyaltyBalance -= withdrawSum
+
+	_, err = transaction.ExecContext(
+		ctx,
+		updateUserBalanceQuery,
+		loyaltyBalance,
+		userID,
+	)
+	if err != nil {
+		err2 := transaction.Rollback()
+		if err2 != nil {
+			return fmt.Errorf(withdrawErr2, err2)
+		}
+		return fmt.Errorf(withdrawErr4, err)
+	}
+
+	err = transaction.Commit()
+	if err != nil {
+		err2 := transaction.Rollback()
+		if err2 != nil {
+			return fmt.Errorf(withdrawErr2, err2)
+		}
+		return fmt.Errorf(withdrawErr5, err)
+	}
+
+	return nil
+}
+
+func (db *PostgresDB) GetUserWithdrawals(
+	ctx context.Context,
+	userID string,
+) ([]models.UserWithdrawal, error) {
+	rows, err := db.database.QueryContext(ctx, getUserWithdrawalsQuery, userID)
+	if err != nil {
+		return nil, fmt.Errorf(getUserWithdrawalsErr1, err)
+	}
+	defer rows.Close()
+
+	result := []models.UserWithdrawal{}
+	for rows.Next() {
+		var orderNumber string
+		var sum float32
+		var processedAt string
+		err = rows.Scan(
+			&orderNumber,
+			&sum,
+			&processedAt,
+		)
+		if err != nil {
+			return nil, fmt.Errorf(getUserWithdrawalsErr2, err)
+		}
+
+		result = append(
+			result,
+			models.UserWithdrawal{
+				OrderNumber: orderNumber,
+				Sum:         sum,
+				ProcessedAt: processedAt,
+			},
+		)
+	}
+
+	err = rows.Err()
+	if err != nil {
+		return nil, fmt.Errorf(getUserWithdrawalsErr3, err)
+	}
+
+	return result, nil
+}
+</file>
+
+<file path="internal/db/postgresdb/orders.go">
+package postgresdb
+
+import (
+	"context"
+	"database/sql"
+	"errors"
+	"fmt"
+	"github.com/patric-chuzhbe/diploma/internal/models"
+	"strings"
+)
+
+func (db *PostgresDB) GetOrderByID(
+	ctx context.Context,
+	ID string,
+	transaction *sql.Tx,
+) (*models.Order, error) {
+	if ID == "" {
+		return &models.Order{}, nil
+	}
+
+	row := transaction.QueryRowContext(ctx, getOrderByIDQuery, ID)
+	var IDFromDB string
+	var status string
+	var uploadedAt string
+	var accrual sql.NullFloat64
+	err := row.Scan(
+		&IDFromDB,
+		&status,
+		&uploadedAt,
+		&accrual,
+	)
+
+	if errors.Is(err, sql.ErrNoRows) {
+		return &models.Order{}, nil
+	}
+
+	if err != nil {
+		return &models.Order{}, fmt.Errorf(getOrderByIDErr1, err)
+	}
+
+	accrualValue := float32(0)
+	if accrual.Valid {
+		accrualValue = float32(accrual.Float64)
+	}
+
+	return &models.Order{
+		Number:     IDFromDB,
+		Status:     status,
+		Accrual:    &accrualValue,
+		UploadedAt: uploadedAt,
+	}, nil
+}
+
+func (db *PostgresDB) GetOrdersAndUpdateStatus(
+	ctx context.Context,
+	statusFilter []string,
+	newStatus string,
+	ordersBatchSize int,
+) (map[string]models.Order, error) {
+	if len(statusFilter) == 0 {
+		return map[string]models.Order{}, nil
+	}
+
+	statusesPlaceholders := make([]string, len(statusFilter))
+	for i := range statusesPlaceholders {
+		statusesPlaceholders[i] = fmt.Sprintf("$%d", i+1)
+	}
+	statusesPlaceholdersAsString := strings.Join(statusesPlaceholders, ",")
+
+	rows, err := db.database.QueryContext(
+		ctx,
+		fmt.Sprintf(
+			getOrdersAndUpdateStatusQuery,
+			statusesPlaceholdersAsString,
+			ordersBatchSize,
+			len(statusFilter)+1,
+		),
+		append(toInterfaceSlice(statusFilter), newStatus)...,
+	)
+	if err != nil {
+		return nil, fmt.Errorf(getOrdersAndUpdateStatusErr1, err)
+	}
+	defer rows.Close()
+
+	result := map[string]models.Order{}
+	for rows.Next() {
+		var number string
+		var status string
+		var accrual sql.NullFloat64
+		var uploadedAt string
+		err = rows.Scan(
+			&number,
+			&status,
+			&accrual,
+			&uploadedAt,
+		)
+		if err != nil {
+			return nil, fmt.Errorf(getOrdersAndUpdateStatusErr2, err)
+		}
+
+		accrualValue := float32(0)
+		if accrual.Valid {
+			accrualValue = float32(accrual.Float64)
+		}
+
+		result[number] = models.Order{
+			Number:     number,
+			Status:     status,
+			Accrual:    &accrualValue,
+			UploadedAt: uploadedAt,
+		}
+	}
+
+	err = rows.Err()
+	if err != nil {
+		return nil, fmt.Errorf(getOrdersAndUpdateStatusErr3, err)
+	}
+
+	return result, nil
+}
+
+func (db *PostgresDB) UpdateOrders(
+	ctx context.Context,
+	orders map[string]models.Order,
+	outerTransaction *sql.Tx,
+) error {
+	innerTransaction := outerTransaction
+	var err error
+	if outerTransaction == nil {
+		innerTransaction, err = db.BeginTransaction()
+		if err != nil {
+			return fmt.Errorf(updateOrdersErr1, err)
+		}
+	}
+
+	for _, order := range orders {
+		_, err := innerTransaction.ExecContext(
+			ctx,
+			updateOrdersQuery,
+			order.Status,
+			*order.Accrual,
+			order.Number,
+		)
+		if err != nil {
+			if outerTransaction == nil {
+				err2 := db.RollbackTransaction(innerTransaction)
+				if err2 != nil {
+					return fmt.Errorf(updateOrdersErr2, err2)
+				}
+			}
+			return fmt.Errorf(updateOrdersErr3, err)
+		}
+	}
+
+	if outerTransaction == nil {
+		err := db.CommitTransaction(innerTransaction)
+		if err != nil {
+			return fmt.Errorf(updateOrdersErr4, err)
+		}
+	}
+
+	return nil
+}
+
+func (db *PostgresDB) GetOrders(
+	ctx context.Context,
+	statusFilter []string,
+	ordersBatchSize int,
+	transaction *sql.Tx,
+) (map[string]models.Order, error) {
+	if len(statusFilter) == 0 {
+		return map[string]models.Order{}, nil
+	}
+
+	statusesPlaceholders := make([]string, len(statusFilter))
+	for i := range statusesPlaceholders {
+		statusesPlaceholders[i] = fmt.Sprintf("$%d", i+1)
+	}
+	statusesPlaceholdersAsString := strings.Join(statusesPlaceholders, ",")
+
+	rows, err := transaction.QueryContext(
+		ctx,
+		fmt.Sprintf(
+			getOrdersQuery,
+			statusesPlaceholdersAsString,
+			ordersBatchSize,
+		),
+		toInterfaceSlice(statusFilter)...,
+	)
+	if err != nil {
+		return nil,
+			fmt.Errorf(getOrdersErr1, err)
+	}
+	defer rows.Close()
+
+	result := map[string]models.Order{}
+	for rows.Next() {
+		var number string
+		var status string
+		var accrual sql.NullFloat64
+		var uploadedAt string
+		err = rows.Scan(
+			&number,
+			&status,
+			&accrual,
+			&uploadedAt,
+		)
+		if err != nil {
+			return nil,
+				fmt.Errorf(getOrdersErr2, err)
+		}
+
+		accrualValue := float32(0)
+		if accrual.Valid {
+			accrualValue = float32(accrual.Float64)
+		}
+
+		result[number] = models.Order{
+			Number:     number,
+			Status:     status,
+			Accrual:    &accrualValue,
+			UploadedAt: uploadedAt,
+		}
+	}
+
+	err = rows.Err()
+	if err != nil {
+		return nil, fmt.Errorf(getOrdersErr3, err)
+	}
+
+	return result, nil
+}
+
+func (db *PostgresDB) SaveNewOrderForUser(
+	ctx context.Context,
+	userID string,
+	orderNumber string,
+) (string, error) {
+	var actualUserID string
+	err := db.database.QueryRowContext(ctx, saveNewOrderForUserQuery, orderNumber, userID).Scan(&actualUserID)
+
+	if errors.Is(err, sql.ErrNoRows) {
+		// Successfully inserted and linked order
+		return userID, nil
+	}
+
+	if err != nil {
+		return "", fmt.Errorf(saveNewOrderForUserErr1, err)
+	}
+
+	return actualUserID, models.ErrOrderAlreadyExists
+}
+
+func (db *PostgresDB) GetUserOrders(
+	ctx context.Context,
+	userID string,
+) ([]models.Order, error) {
+	rows, err := db.database.QueryContext(ctx, getUserOrdersQuery, userID)
+	if err != nil {
+		return nil, fmt.Errorf(getUserOrdersErr1, err)
+	}
+	defer rows.Close()
+
+	result := []models.Order{}
+	for rows.Next() {
+		var number,
+			status,
+			uploadedAt string
+		var accrual sql.NullFloat64
+		err = rows.Scan(
+			&number,
+			&status,
+			&uploadedAt,
+			&accrual,
+		)
+		if err != nil {
+			return nil, fmt.Errorf(getUserOrdersErr2, err)
+		}
+
+		var accrualPtr *float32
+		if accrual.Valid {
+			accrualValue := float32(accrual.Float64)
+			accrualPtr = &accrualValue
+		}
+
+		result = append(
+			result,
+			models.Order{
+				Number:     number,
+				Status:     status,
+				Accrual:    accrualPtr,
+				UploadedAt: uploadedAt,
+			},
+		)
+	}
+
+	err = rows.Err()
+	if err != nil {
+		return nil, fmt.Errorf(getUserOrdersErr3, err)
+	}
+
+	return result, nil
+}
+</file>
+
+<file path="internal/db/postgresdb/queries.go">
+package postgresdb
+
+const (
+	updateOrdersQuery = `
+		UPDATE orders
+			SET
+				status = $1,
+				accrual = $2
+			WHERE id = $3;
+	`
+
+	updateUsersQuery = `
+		UPDATE users 
+			SET 
+				login = $1,
+				pass = $2,
+				loyalty_balance = $3
+			WHERE id = $4
+	`
+
+	getUsersByOrdersQuery = `
+		SELECT DISTINCT
+			users.id,
+			users.login,
+			users.pass,
+			users.loyalty_balance,
+			STRING_AGG(users_orders.order_id, ',') AS order_ids
+			FROM users
+				JOIN users_orders ON 
+					users_orders.user_id = users.id
+						AND users_orders.order_id IN (%s)
+			GROUP BY users.id;
+	`
+
+	getOrdersQuery = `
+		SELECT
+			id,
+			status,
+			accrual,
+			uploaded_at
+			FROM orders
+			WHERE status IN (%s)
+			ORDER BY uploaded_at ASC
+			LIMIT %d;
+	`
+
+	getUserWithdrawalsQuery = `
+		SELECT
+			withdrawals.order_number,
+			withdrawals.sum,
+			withdrawals.processed_at
+			FROM withdrawals
+				JOIN users_withdrawals ON 
+					users_withdrawals.withdraw_order_number = withdrawals.order_number
+						AND users_withdrawals.user_id = $1
+			ORDER BY withdrawals.processed_at DESC;
+	`
+
+	selectUserBalanceQuery = `SELECT loyalty_balance FROM users WHERE id = $1;`
+
+	insertWithdrawalQuery = `
+		INSERT INTO withdrawals (order_number, sum)
+			VALUES ($1, $2)
+			ON CONFLICT (order_number) DO NOTHING
+			RETURNING order_number;
+	`
+
+	insertUserWithdrawalQuery = `
+		INSERT INTO users_withdrawals(user_id, withdraw_order_number)
+			VALUES ($1, $2);
+	`
+
+	updateUserBalanceQuery = `UPDATE users SET loyalty_balance = $1 WHERE id = $2;`
+
+	getUserBalanceAndWithdrawalsQuery = `
+		SELECT 
+			users.id,
+			users.loyalty_balance,
+			SUM(withdrawals."sum")
+			FROM users
+				LEFT JOIN users_withdrawals ON 
+					users_withdrawals.user_id = users.id 
+				LEFT JOIN withdrawals ON 
+					withdrawals.order_number = users_withdrawals.withdraw_order_number
+			WHERE users.id = $1
+			GROUP BY users.id
+			LIMIT 1;
+	`
+
+	getUserOrdersQuery = `
+		SELECT 
+			orders.id,
+			orders.status,
+			orders.uploaded_at,
+			orders.accrual
+			FROM orders
+				JOIN users_orders ON 
+					users_orders.order_id = orders.id
+						AND users_orders.user_id = $1
+			ORDER BY orders.uploaded_at DESC;
+	`
+
+	saveNewOrderForUserQuery = `
+		WITH 
+			ins_order AS (
+				INSERT INTO orders (id, status)
+				   VALUES ($1, 'NEW')
+				   ON CONFLICT (id) DO NOTHING 
+			), 
+			ins_users_orders AS (
+				INSERT INTO users_orders (user_id, order_id)
+					VALUES ($2, $1)
+					ON CONFLICT (order_id) DO NOTHING
+			)
+		SELECT user_id FROM users_orders WHERE order_id = $1;
+	`
+
+	getUserByIDQuery = `SELECT id FROM users WHERE id = $1`
+
+	getUserIDByLoginAndPasswordQuery = `SELECT id FROM users WHERE login = $1 AND pass = $2`
+
+	createUserQuery = `
+		INSERT INTO users (login, pass, loyalty_balance)
+		VALUES ($1, $2, $3)
+		ON CONFLICT (login) DO NOTHING
+		RETURNING id;
+	`
+
+	getOrderByIDQuery = `
+		SELECT 
+			id,
+			status,
+			uploaded_at,
+			accrual
+			FROM orders 
+			WHERE id = $1;
+	`
+
+	getOrdersAndUpdateStatusQuery = `
+		WITH ordersForUpdate AS (
+			SELECT id
+				FROM orders
+				WHERE status IN (%s)
+				ORDER BY uploaded_at ASC
+				LIMIT %d
+				FOR UPDATE SKIP LOCKED
+		)
+		UPDATE orders
+			SET status = $%d
+			FROM ordersForUpdate
+			WHERE orders.id = ordersForUpdate.id
+			RETURNING
+				orders.id,
+				orders.status,
+				orders.accrual,
+				orders.uploaded_at;
+	`
+)
+</file>
+
+<file path="internal/db/postgresdb/users.go">
+package postgresdb
+
+import (
+	"context"
+	"database/sql"
+	"errors"
+	"fmt"
+	"github.com/patric-chuzhbe/diploma/internal/models"
+	"strings"
+)
+
+func (db *PostgresDB) UpdateUsers(
+	ctx context.Context,
+	users []models.User,
+	outerTransaction *sql.Tx,
+) error {
+	innerTransaction := outerTransaction
+	var err error
+	if outerTransaction == nil {
+		innerTransaction, err = db.BeginTransaction()
+		if err != nil {
+			return fmt.Errorf(updateUsersErr1, err)
+		}
+	}
+
+	for _, user := range users {
+		_, err := innerTransaction.ExecContext(
+			ctx,
+			updateUsersQuery,
+			user.Login,
+			user.Pass,
+			user.LoyaltyBalance,
+			user.ID,
+		)
+		if err != nil {
+			if outerTransaction == nil {
+				err2 := db.RollbackTransaction(innerTransaction)
+				if err2 != nil {
+					return fmt.Errorf(updateUsersErr2, err2)
+				}
+			}
+			return fmt.Errorf(updateUsersErr3, err)
+		}
+	}
+
+	if outerTransaction == nil {
+		err := db.CommitTransaction(innerTransaction)
+		if err != nil {
+			return fmt.Errorf(updateUsersErr4, err)
+		}
+	}
+
+	return nil
+}
+
+func (db *PostgresDB) GetUsersByOrders(
+	ctx context.Context,
+	orderNumbers []string,
+	transaction *sql.Tx,
+) ([]models.User, map[string][]string, error) {
+	if len(orderNumbers) == 0 {
+		return []models.User{}, map[string][]string{}, nil
+	}
+
+	statusesPlaceholders := make([]string, len(orderNumbers))
+	for i := range statusesPlaceholders {
+		statusesPlaceholders[i] = fmt.Sprintf("$%d", i+1)
+	}
+	orderNumbersPlaceholdersAsString := strings.Join(statusesPlaceholders, ",")
+
+	rows, err := transaction.QueryContext(
+		ctx,
+		fmt.Sprintf(
+			getUsersByOrdersQuery,
+			orderNumbersPlaceholdersAsString,
+		),
+		toInterfaceSlice(orderNumbers)...,
+	)
+	if err != nil {
+		return []models.User{}, map[string][]string{}, fmt.Errorf(getUsersByOrdersErr1, err)
+	}
+	defer rows.Close()
+
+	users := []models.User{}
+	usersToOrdersMapping := map[string][]string{}
+	for rows.Next() {
+		var userID string
+		var login string
+		var pass string
+		var loyaltyBalance float32
+		var orderIDs string
+		err = rows.Scan(
+			&userID,
+			&login,
+			&pass,
+			&loyaltyBalance,
+			&orderIDs,
+		)
+		if err != nil {
+			return []models.User{}, map[string][]string{}, fmt.Errorf(getUsersByOrdersErr2, err)
+		}
+
+		users = append(users, models.User{
+			ID:             userID,
+			Login:          login,
+			Pass:           pass,
+			LoyaltyBalance: loyaltyBalance,
+		})
+
+		usersToOrdersMapping[userID] = append(usersToOrdersMapping[userID], strings.Split(orderIDs, ",")...)
+	}
+
+	err = rows.Err()
+	if err != nil {
+		return []models.User{}, map[string][]string{}, fmt.Errorf(getUsersByOrdersErr3, err)
+	}
+
+	return users, usersToOrdersMapping, nil
+}
+
+func (db *PostgresDB) GetUserByID(
+	ctx context.Context,
+	userID string,
+) (*models.User, error) {
+	if userID == "" {
+		return &models.User{}, nil
+	}
+
+	row := db.database.QueryRowContext(ctx, getUserByIDQuery, userID)
+	var userIDFromDB string
+	err := row.Scan(&userIDFromDB)
+	if errors.Is(err, sql.ErrNoRows) {
+		return &models.User{}, nil
+	}
+	if err != nil {
+		return &models.User{}, fmt.Errorf(getUserByIDErr1, err)
+	}
+
+	return &models.User{ID: userIDFromDB}, nil
+}
+
+func (db *PostgresDB) CreateUser(
+	ctx context.Context,
+	usr *models.User,
+) (string, error) {
+	var userID string
+	err := db.database.QueryRowContext(ctx, createUserQuery, usr.Login, usr.Pass, usr.LoyaltyBalance).Scan(&userID)
+
+	if errors.Is(err, sql.ErrNoRows) {
+		return "", models.ErrUserAlreadyExists
+	}
+
+	if err != nil {
+		return "", fmt.Errorf(createUserErr1, err)
+	}
+
+	return userID, nil
+}
+
+func (db *PostgresDB) GetUserIDByLoginAndPassword(
+	ctx context.Context,
+	usr *models.User,
+) (string, error) {
+	var userID string
+	err := db.database.QueryRowContext(ctx, getUserIDByLoginAndPasswordQuery, usr.Login, usr.Pass).Scan(&userID)
+
+	if errors.Is(err, sql.ErrNoRows) {
+		return "", nil
+	}
+
+	if err != nil {
+		return "", fmt.Errorf(getUserIDByLoginAndPasswordErr1, err)
+	}
+
+	return userID, nil
+}
+</file>
+
+<file path="cmd/gophermart/.env">
+DATABASE_URI="host=localhost user=diplomauser password=Ga6V0W0Ukn2s2tFn3uku7AAp2GAoy5 dbname=diploma sslmode=disable"
+
+AUTH_COOKIE_SIGNING_SECRET_KEY="LduYtmp2gWSRuyQyRHqbog=="
+
+GOOSE_DRIVER=postgres
+GOOSE_DBSTRING=${DATABASE_URI}
+GOOSE_MIGRATION_DIR=./migrations
+</file>
+
+<file path="go.mod">
+module github.com/patric-chuzhbe/diploma
+
+go 1.23.0
+
+// .0
+
+require (
+	github.com/caarlos0/env/v6 v6.10.1
+	github.com/go-chi/chi/v5 v5.2.1
+	github.com/go-playground/validator/v10 v10.26.0
+	github.com/golang-jwt/jwt/v4 v4.5.2
+	github.com/jackc/pgx/v5 v5.7.4
+	github.com/joeljunstrom/go-luhn v0.0.0-20190413165225-1e071b33b576
+	github.com/joho/godotenv v1.5.1
+	github.com/pressly/goose/v3 v3.24.2
+	github.com/thoas/go-funk v0.9.3
+	go.uber.org/zap v1.27.0
+)
+
+require (
+	github.com/gabriel-vasile/mimetype v1.4.8 // indirect
+	github.com/go-playground/locales v0.14.1 // indirect
+	github.com/go-playground/universal-translator v0.18.1 // indirect
+	github.com/jackc/pgpassfile v1.0.0 // indirect
+	github.com/jackc/pgservicefile v0.0.0-20240606120523-5a60cdf6a761 // indirect
+	github.com/jackc/puddle/v2 v2.2.2 // indirect
+	github.com/leodido/go-urn v1.4.0 // indirect
+	github.com/mfridman/interpolate v0.0.2 // indirect
+	github.com/sethvargo/go-retry v0.3.0 // indirect
+	go.uber.org/multierr v1.11.0 // indirect
+	golang.org/x/crypto v0.36.0 // indirect
+	golang.org/x/net v0.38.0 // indirect
+	golang.org/x/sync v0.12.0 // indirect
+	golang.org/x/sys v0.31.0 // indirect
+	golang.org/x/text v0.23.0 // indirect
+)
+</file>
+
+<file path="internal/config/config.go">
+package config
+
+import (
+	"flag"
+	"fmt"
+	"github.com/caarlos0/env/v6"
+	"github.com/go-playground/validator/v10"
+	"github.com/joho/godotenv"
+	"os"
+	"time"
+)
+
+type Config struct {
+	RunAddr                                       string        `env:"RUN_ADDRESS" envDefault:":8081" validate:"hostname_port"`
+	LogLevel                                      string        `env:"LOG_LEVEL" envDefault:"debug" validate:"loglevel"`
+	DatabaseDSN                                   string        `env:"DATABASE_URI"`
+	MigrationsDir                                 string        `env:"MIGRATIONS_DIR" envDefault:"migrations"`
+	AuthCookieSigningSecretKey                    string        `env:"AUTH_COOKIE_SIGNING_SECRET_KEY" envDefault:"LduYtmp2gWSRuyQyRHqbog=="`
+	AuthCookieName                                string        `env:"AUTH_COOKIE_NAME" envDefault:"auth"`
+	DelayBetweenQueueFetchesForBalancesCalculator time.Duration `env:"DELAY_BETWEEN_QUEUE_FETCHES_FOR_BALANCES_CALCULATOR" envDefault:"5s"`
+	ErrorChannelCapacity                          int           `env:"ERROR_CHANNEL_CAPACITY" envDefault:"1024"`
+	DelayBetweenQueueFetchesForAccrualsFetcher    time.Duration `env:"DELAY_BETWEEN_QUEUE_FETCHES_FOR_ACCRUALS_FETCHER" envDefault:"5s"`
+	OrdersBatchSizeForBalancesCalculator          int           `env:"ORDERS_BATCH_SIZE_FOR_BALANCES_CALCULATOR" envDefault:"500"`
+	OrdersBatchSizeForAccrualsFetcher             int           `env:"ORDERS_BATCH_SIZE_FOR_ACCRUALS_FETCHER" envDefault:"500"`
+	HTTPClientTimeoutForAccrualsFetcher           time.Duration `env:"HTTP_CLIENT_TIMEOUT_FOR_ACCRUALS_FETCHER" envDefault:"10s"`
+	AccrualSystemAddress                          string        `env:"ACCRUAL_SYSTEM_ADDRESS" envDefault:"http://localhost:8080" validate:"url"`
+	DelayBetweenOrdersQueueFetches                time.Duration `env:"DELAY_BETWEEN_ORDERS_QUEUE_FETCHES" envDefault:"5s"`
+	OrdersBatchSize                               int           `env:"ORDERS_BATCH_SIZE" envDefault:"500"`
+	HTTPClientTimeoutForBalancesActualizer        time.Duration `env:"HTTP_CLIENT_TIMEOUT_FOR_BALANCES_ACTUALIZER" envDefault:"10s"`
+	NumFetchAccrualWorkers                        int           `env:"NUM_FETCH_ACCRUAL_WORKERS" envDefault:"10"`
+	NumUpdateOrdersWorkers                        int           `env:"NUM_UPDATE_ORDERS_WORKERS" envDefault:"10"`
+	NumUpdateBalancesWorkers                      int           `env:"NUM_UPDATE_BALANCES_WORKERS" envDefault:"10"`
+}
+
+func validateFilePath(fieldLevel validator.FieldLevel) bool {
+	path := fieldLevel.Field().String()
+	_, err := os.Stat(path)
+
+	return err == nil || os.IsNotExist(err)
+}
+
+func validateLogLevel(fieldLevel validator.FieldLevel) bool {
+	value := fieldLevel.Field().String()
+
+	allowedLogLevels := map[string]bool{
+		"debug":   true,
+		"info":    true,
+		"warning": true,
+		"error":   true,
+		"fatal":   true,
+	}
+
+	return allowedLogLevels[value]
+}
+
+func (conf *Config) Validate() error {
+	validate := validator.New()
+
+	err := validate.RegisterValidation("loglevel", validateLogLevel)
+	if err != nil {
+		return err
+	}
+
+	err = validate.RegisterValidation("filepath", validateFilePath)
+	if err != nil {
+		return err
+	}
+
+	return validate.Struct(conf)
+}
+
+type InitOption func(*initOptions)
+
+type initOptions struct {
+	disableFlagsParsing bool
+}
+
+func WithDisableFlagsParsing(disableFlagsParsing bool) InitOption {
+	return func(options *initOptions) {
+		options.disableFlagsParsing = disableFlagsParsing
+	}
+}
+
+func New(optionsProto ...InitOption) (*Config, error) {
+	options := &initOptions{
+		disableFlagsParsing: false,
+	}
+	for _, protoOption := range optionsProto {
+		protoOption(options)
+	}
+
+	err := godotenv.Load()
+	if err != nil {
+		return nil, fmt.Errorf("unable to load .env file:  %w", err)
+	}
+
+	values := Config{}
+
+	err = env.Parse(&values)
+	if err != nil {
+		return nil, err
+	}
+
+	if !options.disableFlagsParsing {
+		flag.StringVar(&values.RunAddr, "a", values.RunAddr, "address and port to run server")
+		flag.StringVar(&values.DatabaseDSN, "d", values.DatabaseDSN, "a string with the database connection details")
+		flag.StringVar(&values.AccrualSystemAddress, "r", values.AccrualSystemAddress, "accrual calculation system address")
+		flag.Parse()
+	}
+
+	return &values, values.Validate()
+}
+</file>
+
+<file path="internal/models/models.go">
+package models
+
+import "errors"
+
+type UserRegisterRequest struct {
+	Login string `json:"login" validate:"required,alphanum"`
+	Pass  string `json:"password" validate:"required,min=8,max=40,password"`
+}
+
+type User struct {
+	ID             string
+	Login          string
+	Pass           string
+	LoyaltyBalance float32
+}
+
+var ErrUserAlreadyExists = errors.New("user already exists")
+
+var ErrOrderAlreadyExists = errors.New("order already exists")
+
+type Order struct {
+	Number     string   `json:"number"`
+	Status     string   `json:"status"`
+	Accrual    *float32 `json:"accrual,omitempty"`
+	UploadedAt string   `json:"uploaded_at"`
+}
+
+type UserBalanceAndWithdrawals struct {
+	Current   float32 `json:"current"`
+	Withdrawn float32 `json:"withdrawn"`
+}
+
+type BalanceWithdrawRequest struct {
+	OrderNumber string  `json:"order"`
+	WithdrawSum float32 `json:"sum"`
+}
+
+var ErrNotEnoughBalance = errors.New("not enough loyalty balance")
+
+var ErrAlreadyWithdrawn = errors.New("the order has already withdrawn")
+
+type UserWithdrawal struct {
+	OrderNumber string  `json:"order"`
+	Sum         float32 `json:"sum"`
+	ProcessedAt string  `json:"processed_at"`
+}
+
+const (
+	LocalOrderStatusNew        = "NEW"
+	LocalOrderStatusProcessing = "PROCESSING"
+	LocalOrderStatusInvalid    = "INVALID"
+	LocalOrderStatusProcessed  = "PROCESSED"
+
+	RemoteOrderStatusRegistered = "REGISTERED"
+	RemoteOrderStatusInvalid    = "INVALID"
+	RemoteOrderStatusProcessing = "PROCESSING"
+	RemoteOrderStatusProcessed  = "PROCESSED"
+)
+</file>
+
+<file path="internal/router/router.go">
+package router
+
+import (
+	"github.com/go-chi/chi/v5"
+	"github.com/patric-chuzhbe/diploma/internal/logger"
+	"github.com/patric-chuzhbe/diploma/internal/middlewares"
+	"github.com/patric-chuzhbe/diploma/internal/router/handlers"
+	"net/http"
+)
+
+type storage interface {
+	handlers.UsersKeeper
+	handlers.BalancesKeeper
+	handlers.OrdersKeeper
+}
+
+type authenticator interface {
+	SetAuthData(userID string, response http.ResponseWriter) error
+	AuthenticateUser(h http.Handler) http.Handler
+}
+
+func New(
+	db storage,
+	auth authenticator,
+) *chi.Mux {
+	r := chi.NewRouter()
+
+	r.Use(
+		logger.WithLoggingHTTPMiddleware,
+		middlewares.UngzipJSONAndTextHTMLRequest,
+	)
+
+	indexHandler := handlers.NewIndexHandler()
+	authHandler := handlers.NewAuthHandler(db, auth)
+	ordersHandler := handlers.NewOrdersHandler(db, auth)
+	balanceHandler := handlers.NewBalanceHandler(db, auth)
+
+	r.Get(`/`, indexHandler.GetIndex)
+
+	r.Post(`/api/user/register`, authHandler.PostApiuserregister)
+
+	r.Post(`/api/user/login`, authHandler.PostApiuserlogin)
+
+	r.With(
+		middlewares.GzipResponse,
+		auth.AuthenticateUser,
+	).Post(`/api/user/orders`, ordersHandler.PostApiuserorders)
+
+	r.With(
+		middlewares.GzipResponse,
+		auth.AuthenticateUser,
+	).Get(`/api/user/orders`, ordersHandler.GetApiuserorders)
+
+	r.With(
+		middlewares.GzipResponse,
+		auth.AuthenticateUser,
+	).Get(`/api/user/balance`, balanceHandler.GetApiuserbalance)
+
+	r.With(auth.AuthenticateUser).Post(`/api/user/balance/withdraw`, balanceHandler.PostApiuserbalancewithdraw)
+
+	r.With(
+		middlewares.GzipResponse,
+		auth.AuthenticateUser,
+	).Get(`/api/user/withdrawals`, balanceHandler.GetApiuserwithdrawals)
+
+	return r
+}
+</file>
+
+<file path="internal/db/postgresdb/postgresdb.go">
+package postgresdb
+
+import (
+	"database/sql"
+	"fmt"
+	_ "github.com/jackc/pgx/v5/stdlib"
+	"github.com/pressly/goose/v3"
+)
+
+type PostgresDB struct {
+	database *sql.DB
+}
+
+func (db *PostgresDB) CommitTransaction(transaction *sql.Tx) (err error) {
+	defer func() {
+		if r := recover(); r != nil {
+			err = fmt.Errorf("panic occurred while committing transaction: %v", r)
+		}
+	}()
+
+	return transaction.Commit()
+}
+
+func (db *PostgresDB) RollbackTransaction(transaction *sql.Tx) error {
+	return transaction.Rollback()
+}
+
+func (db *PostgresDB) BeginTransaction() (*sql.Tx, error) {
+	return db.database.Begin()
+}
+
+func New(databaseDSN string, migrationsDir string) (*PostgresDB, error) {
+	database, err := sql.Open("pgx", databaseDSN)
+	if err != nil {
+		return nil, fmt.Errorf(newErr1, err)
+	}
+
+	result := &PostgresDB{
+		database: database,
+	}
+
+	if err := goose.SetDialect("postgres"); err != nil {
+		return nil, fmt.Errorf(newErr2, err)
+	}
+
+	if err := goose.Up(result.database, migrationsDir); err != nil {
+		return nil, fmt.Errorf(newErr3, err)
+	}
+
+	return result, nil
+}
+
+func (db *PostgresDB) Close() error {
+	err := db.database.Close()
+	if err != nil {
+		return fmt.Errorf(closeErr1, err)
+	}
+
+	return nil
+}
+</file>
+
+<file path="internal/app/app.go">
+package app
+
+import (
+	"context"
+	"database/sql"
+	"encoding/base64"
+	"fmt"
+	"github.com/patric-chuzhbe/diploma/internal/auth"
+	"github.com/patric-chuzhbe/diploma/internal/balancesactualizer"
+	"github.com/patric-chuzhbe/diploma/internal/config"
+	"github.com/patric-chuzhbe/diploma/internal/db/postgresdb"
+	"github.com/patric-chuzhbe/diploma/internal/logger"
+	"github.com/patric-chuzhbe/diploma/internal/models"
+	"github.com/patric-chuzhbe/diploma/internal/router"
+	"go.uber.org/zap"
+	"net/http"
+	"os"
+	"os/signal"
+	"syscall"
+	"time"
+)
+
+type usersKeeper interface {
+	CreateUser(ctx context.Context, usr *models.User) (string, error)
+
+	GetUserIDByLoginAndPassword(
+		ctx context.Context,
+		usr *models.User,
+	) (string, error)
+
+	GetUserByID(
+		ctx context.Context,
+		userID string,
+	) (*models.User, error)
+
+	UpdateUsers(
+		ctx context.Context,
+		users []models.User,
+		outerTransaction *sql.Tx,
+	) error
+}
+
+type userWithdrawalsKeeper interface {
+	GetUserBalanceAndWithdrawals(
+		ctx context.Context,
+		userID string,
+	) (*models.UserBalanceAndWithdrawals, error)
+
+	Withdraw(
+		ctx context.Context,
+		userID string,
+		orderNumber string,
+		withdrawSum float32,
+	) error
+
+	GetUserWithdrawals(
+		ctx context.Context,
+		userID string,
+	) ([]models.UserWithdrawal, error)
+}
+
+type transactioner interface {
+	BeginTransaction() (*sql.Tx, error)
+
+	RollbackTransaction(transaction *sql.Tx) error
+
+	CommitTransaction(transaction *sql.Tx) error
+}
+
+type userOrdersKeeper interface {
+	SaveNewOrderForUser(
+		ctx context.Context,
+		userID string,
+		orderNumber string,
+	) (string, error)
+
+	GetUserOrders(
+		ctx context.Context,
+		userID string,
+	) ([]models.Order, error)
+
+	GetOrders(
+		ctx context.Context,
+		statusFilter []string,
+		ordersBatchSize int,
+		transaction *sql.Tx,
+	) (map[string]models.Order, error)
+
+	GetUsersByOrders(
+		ctx context.Context,
+		orderNumbers []string,
+		transaction *sql.Tx,
+	) ([]models.User, map[string][]string, error)
+
+	UpdateOrders(
+		ctx context.Context,
+		orders map[string]models.Order,
+		outerTransaction *sql.Tx,
+	) error
+
+	GetOrdersAndUpdateStatus(
+		ctx context.Context,
+		statusFilter []string,
+		newStatus string,
+		ordersBatchSize int,
+	) (map[string]models.Order, error)
+
+	GetOrderByID(
+		ctx context.Context,
+		ID string,
+		transaction *sql.Tx,
+	) (*models.Order, error)
+}
+
+type storage interface {
+	usersKeeper
+	userWithdrawalsKeeper
+	transactioner
+	userOrdersKeeper
+
+	Close() error
+}
+
+type App struct {
+	cfg                      *config.Config
+	db                       storage
+	httpHandler              http.Handler
+	stopBalancesCalculator   context.CancelFunc
+	balancesCalculatorRunCtx context.Context
+	stopAccrualsFetcher      context.CancelFunc
+	accrualsFetcherRunCtx    context.Context
+	balancesActualizer       *balancesactualizer.BalancesActualizer
+	stopBalancesActualizer   context.CancelFunc
+	balancesActualizerRunCtx context.Context
+}
+
+func New() (*App, error) {
+	var err error
+	app := &App{}
+
+	app.cfg, err = config.New()
+	if err != nil {
+		return nil, err
+	}
+
+	err = logger.Init(app.cfg.LogLevel)
+	if err != nil {
+		return nil, err
+	}
+
+	app.db, err = postgresdb.New(app.cfg.DatabaseDSN, app.cfg.MigrationsDir)
+	if err != nil {
+		return nil, err
+	}
+
+	app.balancesActualizer = balancesactualizer.New(
+		app.db,
+		app.cfg.DelayBetweenOrdersQueueFetches,
+		app.cfg.ErrorChannelCapacity,
+		app.cfg.OrdersBatchSize,
+		app.cfg.HTTPClientTimeoutForBalancesActualizer,
+		app.cfg.AccrualSystemAddress,
+		app.cfg.NumFetchAccrualWorkers,
+		app.cfg.NumUpdateOrdersWorkers,
+		app.cfg.NumUpdateBalancesWorkers,
+	)
+	balancesActualizerRunCtx, stopBalancesActualizer := context.WithCancel(context.Background())
+	app.stopBalancesActualizer = stopBalancesActualizer
+	app.balancesActualizerRunCtx = balancesActualizerRunCtx
+
+	app.balancesActualizer.ListenErrors(func(err error) {
+		logger.Log.Debugln("Error passed from the `app.balancesActualizer.ListenErrors()`:", zap.Error(err))
+	})
+
+	authCookieSigningSecretKey, err := base64.URLEncoding.DecodeString(app.cfg.AuthCookieSigningSecretKey)
+	if err != nil {
+		return nil, err
+	}
+
+	app.httpHandler = router.New(
+		app.db,
+		auth.New(
+			app.db,
+			app.cfg.AuthCookieName,
+			authCookieSigningSecretKey,
+		),
+	)
+
+	return app, nil
+}
+
+func (a *App) Run() error {
+	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGINT, syscall.SIGTERM)
+	defer stop()
+
+	logger.Log.Infoln("server running", "RunAddr", a.cfg.RunAddr)
+
+	server := &http.Server{
+		Addr:    a.cfg.RunAddr,
+		Handler: a.httpHandler,
+	}
+
+	serverErrCh := make(chan error, 1)
+	go func() {
+		serverErrCh <- server.ListenAndServe()
+	}()
+
+	a.balancesActualizer.Run(a.balancesActualizerRunCtx)
+
+	select {
+	case <-ctx.Done():
+		logger.Log.Infoln("Received shutdown signal. Saving database and exiting...")
+		a.stopBalancesActualizer()
+		shutdownCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+		defer cancel()
+
+		if err := server.Shutdown(shutdownCtx); err != nil {
+			return fmt.Errorf("server shutdown error: %w", err)
+		}
+
+		return a.db.Close()
+
+	case err := <-serverErrCh:
+		return fmt.Errorf("server error: %w", err)
+	}
+}
+
+func (a *App) Close() {
+	if err := logger.Sync(); err != nil {
+		fmt.Println("Logger sync error:", err)
+	}
+}
+</file>
+
+</files>

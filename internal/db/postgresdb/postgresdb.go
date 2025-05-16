@@ -1,6 +1,7 @@
 package postgresdb
 
 import (
+	"context"
 	"database/sql"
 	"fmt"
 	_ "github.com/jackc/pgx/v5/stdlib"
@@ -9,6 +10,29 @@ import (
 
 type PostgresDB struct {
 	database *sql.DB
+}
+
+func (db *PostgresDB) resetDB(ctx context.Context) error {
+	_, err := db.database.ExecContext(
+		ctx,
+		`
+			DO $$
+			DECLARE
+				r RECORD;
+			BEGIN
+				FOR r IN (SELECT tablename FROM pg_tables WHERE schemaname = 'public') LOOP
+					EXECUTE 'DROP TABLE IF EXISTS ' || quote_ident(r.tablename) || ' CASCADE';
+				END LOOP;
+			END $$;
+		`,
+	)
+	if err != nil {
+		return fmt.Errorf(
+			"in internal/db/postgresdb/postgresdb.go/resetDB(): error while `db.database.ExecContext()` calling: %w",
+			err,
+		)
+	}
+	return nil
 }
 
 func (db *PostgresDB) CommitTransaction(transaction *sql.Tx) (err error) {
@@ -29,7 +53,26 @@ func (db *PostgresDB) BeginTransaction() (*sql.Tx, error) {
 	return db.database.Begin()
 }
 
-func New(databaseDSN string, migrationsDir string) (*PostgresDB, error) {
+type InitOption func(*initOptions)
+
+type initOptions struct {
+	DBPreReset bool
+}
+
+func WithDBPreReset(value bool) InitOption {
+	return func(options *initOptions) {
+		options.DBPreReset = value
+	}
+}
+
+func New(databaseDSN string, migrationsDir string, optionsProto ...InitOption) (*PostgresDB, error) {
+	options := &initOptions{
+		DBPreReset: false,
+	}
+	for _, protoOption := range optionsProto {
+		protoOption(options)
+	}
+
 	database, err := sql.Open("pgx", databaseDSN)
 	if err != nil {
 		return nil, fmt.Errorf(newErr1, err)
@@ -37,6 +80,16 @@ func New(databaseDSN string, migrationsDir string) (*PostgresDB, error) {
 
 	result := &PostgresDB{
 		database: database,
+	}
+
+	if options.DBPreReset {
+		if err := result.resetDB(context.TODO()); err != nil {
+			return nil,
+				fmt.Errorf(
+					"in internal/db/postgresdb/postgresdb.go/New(): error while `result.resetDB()` calling: %w",
+					err,
+				)
+		}
 	}
 
 	if err := goose.SetDialect("postgres"); err != nil {

@@ -37,6 +37,21 @@ type BalanceHandler struct {
 	auth authenticator
 }
 
+/*< testCode>*/
+//func dumpAnyStructByGubanov(val interface{}) string {
+//	if val == nil {
+//		return "null"
+//	}
+//
+//	str, err := json.MarshalIndent(val, "", "\t")
+//	if err != nil {
+//		return fmt.Sprintf("Error marshaling JSON: %s", err)
+//	}
+//	return string(str)
+//}
+
+/*</testCode>*/
+
 func (h *BalanceHandler) GetApiuserwithdrawals(response http.ResponseWriter, request *http.Request) {
 	userID, ok := request.Context().Value(auth.UserIDKey).(string)
 	if !ok || userID == "" {
@@ -126,6 +141,23 @@ func (h *BalanceHandler) PostApiuserbalancewithdraw(response http.ResponseWriter
 
 func (h *BalanceHandler) GetApiuserbalance(response http.ResponseWriter, request *http.Request) {
 	userID, ok := request.Context().Value(auth.UserIDKey).(string)
+	/*< testCode>*/
+	//if false {
+	//	logFile, _ := os.OpenFile("log00for_diploma.internal.router.handlers.balance.go.GetApiuserbalance.log", os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
+	//	_, _, line, _ := runtime.Caller(0)
+	//	fmt.Fprintln(
+	//		logFile,
+	//		"line: "+
+	//			strconv.Itoa(line)+
+	//			"\n\tok: "+
+	//			dumpAnyStructByGubanov(ok)+
+	//			"\n\n\tuserID: "+
+	//			dumpAnyStructByGubanov(userID)+
+	//			"\n\n",
+	//	)
+	//	logFile.Close()
+	//}
+	/*</testCode>*/
 	if !ok || userID == "" {
 		response.WriteHeader(http.StatusUnauthorized)
 		return
