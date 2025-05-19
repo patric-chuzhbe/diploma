@@ -31,8 +31,8 @@ type UserBalanceAndWithdrawals struct {
 }
 
 type BalanceWithdrawRequest struct {
-	OrderNumber string  `json:"order"`
-	WithdrawSum float32 `json:"sum"`
+	OrderNumber string  `json:"order" validate:"required"`
+	WithdrawSum float32 `json:"sum" validate:"required"`
 }
 
 var ErrNotEnoughBalance = errors.New("not enough loyalty balance")

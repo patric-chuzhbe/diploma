@@ -55,6 +55,8 @@ const (
 
 	newErr3 = "in internal/db/postgresdb/postgresdb.go/New(): error while `goose.Up()` calling: %w"
 
+	newErr4 = "in internal/db/postgresdb/postgresdb.go/New(): error while `result.resetDB()` calling: %w"
+
 	closeErr1 = "in internal/db/postgresdb/postgresdb.go/Close(): error while `db.database.Close()` calling: %w"
 
 	updateUsersErr1 = "in internal/db/postgresdb/users.go/UpdateUsers(): error while `db.BeginTransaction()` calling: %w"
@@ -76,4 +78,6 @@ const (
 	createUserErr1 = "in internal/db/postgresdb/users.go/CreateUser(): error while `db.database.QueryRowContext()` calling: %w"
 
 	getUserIDByLoginAndPasswordErr1 = "in internal/db/postgresdb/users.go/GetUserIDByLoginAndPassword(): error while `db.database.QueryRowContext()` calling: %w"
+
+	resetDBErr = "in internal/db/postgresdb/postgresdb.go/resetDB(): error while `db.database.ExecContext()` calling: %w"
 )

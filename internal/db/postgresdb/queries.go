@@ -115,7 +115,7 @@ const (
 		SELECT user_id FROM users_orders WHERE order_id = $1;
 	`
 
-	getUserByIDQuery = `SELECT id FROM users WHERE id = $1`
+	getUserByIDQuery = `SELECT id, login, pass, loyalty_balance FROM users WHERE id = $1`
 
 	getUserIDByLoginAndPasswordQuery = `SELECT id FROM users WHERE login = $1 AND pass = $2`
 
@@ -154,5 +154,16 @@ const (
 				orders.status,
 				orders.accrual,
 				orders.uploaded_at;
+	`
+
+	resetDBQuery = `
+		DO $$
+		DECLARE
+			r RECORD;
+		BEGIN
+			FOR r IN (SELECT tablename FROM pg_tables WHERE schemaname = 'public') LOOP
+				EXECUTE 'DROP TABLE IF EXISTS ' || quote_ident(r.tablename) || ' CASCADE';
+			END LOOP;
+		END $$;
 	`
 )

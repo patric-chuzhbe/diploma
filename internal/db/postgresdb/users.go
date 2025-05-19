@@ -128,7 +128,15 @@ func (db *PostgresDB) GetUserByID(
 
 	row := db.database.QueryRowContext(ctx, getUserByIDQuery, userID)
 	var userIDFromDB string
-	err := row.Scan(&userIDFromDB)
+	var login string
+	var pass string
+	var loyaltyBalance float32
+	err := row.Scan(
+		&userIDFromDB,
+		&login,
+		&pass,
+		&loyaltyBalance,
+	)
 	if errors.Is(err, sql.ErrNoRows) {
 		return &models.User{}, nil
 	}
@@ -136,7 +144,12 @@ func (db *PostgresDB) GetUserByID(
 		return &models.User{}, fmt.Errorf(getUserByIDErr1, err)
 	}
 
-	return &models.User{ID: userIDFromDB}, nil
+	return &models.User{
+		ID:             userIDFromDB,
+		Login:          login,
+		Pass:           pass,
+		LoyaltyBalance: loyaltyBalance,
+	}, nil
 }
 
 func (db *PostgresDB) CreateUser(
